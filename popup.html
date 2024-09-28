@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gmail Email Manager</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <h1>Gmail Manager</h1>
+
+    <div id="welcomeMessage"></div>
+
+    <div id="mainMenu">
+      <button id="batchDelete">Batch Delete Emails</button>
+      <button id="deleteBySender">Delete Emails by Sender</button>
+      <button id="subscriptions">Manage Subscriptions</button>
+    </div>
+
+    <div id="batchDeleteWindow" class="hidden">
+      <h2>Select a Label/Category to Batch Delete:</h2>
+      <select id="labelSelect" class="scrollable-dropdown">
+        <option>Select a category/label</option>
+      </select>
+      <button id="deleteSelected">Delete Emails in Selected Label</button>
+      <button id="backToMenu">Back</button>
+    </div>
+
+    <div id="deleteBySenderWindow" class="hidden">
+      <h2>Delete Emails by Sender:</h2>
+      <button id="deleteBySenderConfirm">Start Deleting by Sender</button>
+      <button id="backToMenuFromSender">Back</button>
+    </div>
+
+    <div id="subscriptionsWindow" class="hidden">
+      <h2>Manage Subscriptions:</h2>
+      <button id="manageSubscriptionsConfirm">
+        Start Managing Subscriptions
+      </button>
+      <button id="backToMenuFromSubscriptions">Back</button>
+    </div>
+
+    <div id="customModal" class="modal">
+      <div class="modal-content">
+        <p id="modalMessage"></p>
+        <button id="modalButton">OK</button>
+      </div>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay hidden">
+      <div class="loading-spinner-container">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+      </div>
+    </div>
+
+    <script src="actions/common.js"></script>
+    <script src="actions/batchDelete.js"></script>
+    <script src="actions/deleteBySender.js"></script>
+    <script src="actions/manageSubscriptions.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
