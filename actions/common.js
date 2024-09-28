@@ -59,9 +59,7 @@ function setupModal(
 function setupConfirmModal(modal, modalButton, callback) {
   const cancelButton = document.createElement("button");
   cancelButton.textContent = "Cancel";
-
   modalButton.textContent = "Confirm";
-
   const modalContent = document.querySelector(".modal-content");
   modalContent.appendChild(cancelButton);
 
@@ -110,7 +108,7 @@ function fetchEmails(token, labelId, query = "", callback) {
       .catch((error) => console.error("Error fetching emails:", error));
   }
 
-  getEmails(); // Start fetching emails
+  getEmails();
 }
 
 // Fetch and Display Sorted Labels with Email Counts
@@ -148,11 +146,11 @@ function fetchAndDisplayLabels(token, callback) {
     .catch((error) => {
       displayErrorLabel(labelSelect);
       console.error("Error fetching labels:", error);
-      callback(); // Call the callback in case of an error too
+      callback();
     });
 }
 
-// Display labels with email count (separate from label name)
+// Display labels with email count
 function displayLabels(labelSelect, labelsWithCounts) {
   labelSelect.innerHTML = "";
   labelsWithCounts.forEach(({ labelId, labelName, emailCount }) => {
@@ -177,9 +175,14 @@ function formatLabelName(labelName) {
   if (labelName.startsWith("CATEGORY_")) {
     labelName = labelName.replace("CATEGORY_", "");
   }
-  return labelName
-    .toLowerCase()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  const words = labelName.split("_");
+  const formattedWords = [];
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const formattedWord = word.charAt(0) + word.slice(1).toLowerCase();
+    formattedWords.push(formattedWord);
+  }
+
+  return formattedWords.join(" ");
 }

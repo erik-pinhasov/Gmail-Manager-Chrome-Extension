@@ -14,8 +14,10 @@ function batchDeleteEmails(token, labelId, labelName) {
   });
 }
 
+// Delete emails in batches
 function deleteEmails(token, messageIds, labelId, labelName, totalEmails) {
   const batchSize = 1000;
+
   const deleteInBatches = (ids) => {
     const batch = ids.slice(0, batchSize);
     const remaining = ids.slice(batchSize);
@@ -32,8 +34,12 @@ function deleteEmails(token, messageIds, labelId, labelName, totalEmails) {
         if (remaining.length > 0) {
           deleteInBatches(remaining); // Recursively delete remaining batches
         } else {
-          fetchAndDisplayLabels(token); // Refetch labels to update counts
-          handleDeletionSuccess(labelId, labelName, totalEmails);
+          // After all batches are deleted, refetch the updated labels
+          toggleLoadingSpinner(true);
+          fetchAndDisplayLabels(token, () => {
+            toggleLoadingSpinner(false);
+            handleDeletionSuccess(labelId, labelName, totalEmails);
+          });
         }
       })
       .catch((error) => {
@@ -42,7 +48,7 @@ function deleteEmails(token, messageIds, labelId, labelName, totalEmails) {
       });
   };
 
-  deleteInBatches(messageIds); // Start deleting in batches
+  deleteInBatches(messageIds); // Start batch deletion
 }
 
 // Handle successful deletion
