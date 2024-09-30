@@ -1,29 +1,14 @@
-// Utility: Show/hide the loading spinner with the overlay
+// Show/hide the loading spinner with the overlay
 function toggleLoadingSpinner(show) {
   const overlay = document.getElementById("loadingOverlay");
-  if (show) {
-    overlay.classList.remove("hidden");
-  } else {
-    overlay.classList.add("hidden");
-  }
+  overlay.classList.toggle("hidden", !show);
 }
 
-// Utility: Fetch OAuth token
-function fetchToken(interactive, callback) {
-  getAuthToken(interactive, (token) => {
-    if (token) {
-      callback(token);
-    } else {
-      console.error("Error fetching token");
-    }
-  });
-}
-
-// Utility: Show a specific window and hide others
+// UI windows
 function showWindow(windowToShow) {
   const windows = [
     "mainMenu",
-    "batchDeleteWindow",
+    "deleteByLabelWindow",
     "deleteBySenderWindow",
     "subscriptionsWindow",
   ];
@@ -43,20 +28,22 @@ function initializeUserDetails() {
   });
 }
 
-// Handle batch delete flow
-function initializeBatchDeleteHandler() {
-  // When the "Batch Delete" button is clicked
-  document.getElementById("batchDelete").addEventListener("click", () => {
-    toggleLoadingSpinner(true); // Show the spinner only for fetching labels
+// Handle delete by label flow
+function deleteByLabelHandler() {
+  document.getElementById("deleteByLabel").addEventListener("click", () => {
+    toggleLoadingSpinner(true);
     fetchToken(true, (token) => {
-      fetchAndDisplayLabels(token, () => {
-        toggleLoadingSpinner(false); // Hide spinner once fetching is done
-        showWindow("batchDeleteWindow"); // Show the window after fetching
-      });
+      fetchAndDisplayLabels(
+        token,
+        () => {
+          toggleLoadingSpinner(false);
+          showWindow("deleteByLabelWindow");
+        },
+        true
+      );
     });
   });
 
-  // Handle batch deletion after label is selected
   document.getElementById("deleteSelected").addEventListener("click", () => {
     const labelSelect = document.getElementById("labelSelect");
     const selectedLabelId = labelSelect.value;
@@ -64,46 +51,62 @@ function initializeBatchDeleteHandler() {
       labelSelect.options[labelSelect.selectedIndex].text;
 
     fetchToken(false, (token) => {
-      batchDeleteEmails(token, selectedLabelId, selectedLabelName);
+      batchDeleteLabel(token, selectedLabelId, selectedLabelName);
     });
   });
 }
 
-// Initialize UI Handlers for buttons that require fetching data
-function initializeMainActionHandlers() {
-  // Handle Delete by Sender button
+// Handle delete by sender flow
+function deleteBySenderHandler() {
   document.getElementById("deleteBySender").addEventListener("click", () => {
-    // No fetching needed here, just show the window
     showWindow("deleteBySenderWindow");
   });
 
-  // Handle Manage Subscriptions button
-  document.getElementById("subscriptions").addEventListener("click", () => {
-    // No fetching needed here, just show the window
-    showWindow("subscriptionsWindow");
-  });
+  document
+    .getElementById("searchSenderButton")
+    .addEventListener("click", () => {
+      const searchTerm = document
+        .getElementById("searchSenderInput")
+        .value.trim();
+
+      if (!searchTerm) {
+        showCustomAlert("Please enter a search term.");
+        return;
+      }
+
+      toggleLoadingSpinner(true);
+      fetchToken(true, (token) => {
+        fetchEmailsBySearch(token, searchTerm, (senders) => {
+          toggleLoadingSpinner(false);
+          displaySendersWithEmailCounts(token, senders);
+        });
+      });
+    });
+
+  document
+    .getElementById("deleteBySenderConfirm")
+    .addEventListener("click", () => {
+      fetchToken(false, (token) => {
+        const senderSelect = document.getElementById("senderSelect");
+        const selectedSender = senderSelect.value;
+        batchDeleteSender(token, selectedSender);
+      });
+    });
 }
 
 // Initialize back button handlers
 function initializeBackButtonHandlers() {
-  document
-    .getElementById("backToMenu")
-    .addEventListener("click", () => showWindow("mainMenu"));
-  document
-    .getElementById("backToMenuFromSender")
-    .addEventListener("click", () => showWindow("mainMenu"));
-  document
-    .getElementById("backToMenuFromSubscriptions")
-    .addEventListener("click", () => showWindow("mainMenu"));
+  document.querySelectorAll("#backToMenu").forEach((button) => {
+    button.addEventListener("click", () => showWindow("mainMenu"));
+  });
 }
 
 // Initialize the popup
 function initializePopup() {
   initializeUserDetails();
-  initializeBatchDeleteHandler(); // Handle batch delete flow
-  initializeMainActionHandlers(); // Handle other main actions
-  initializeBackButtonHandlers(); // Handle back buttons
+  initializeBackButtonHandlers();
+  deleteByLabelHandler();
+  deleteBySenderHandler();
 }
 
-// Run the initialization when the popup loads
 initializePopup();

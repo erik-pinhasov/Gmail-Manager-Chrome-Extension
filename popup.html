@@ -12,13 +12,13 @@
     <div id="welcomeMessage"></div>
 
     <div id="mainMenu">
-      <button id="batchDelete">Batch Delete Emails</button>
+      <button id="deleteByLabel">Batch Delete Emails</button>
       <button id="deleteBySender">Delete Emails by Sender</button>
       <button id="subscriptions">Manage Subscriptions</button>
     </div>
 
-    <div id="batchDeleteWindow" class="hidden">
-      <h2>Select a Label/Category to Batch Delete:</h2>
+    <div id="deleteByLabelWindow" class="hidden">
+      <h2>Select a Label to Delete:</h2>
       <select id="labelSelect" class="scrollable-dropdown">
         <option>Select a category/label</option>
       </select>
@@ -27,9 +27,18 @@
     </div>
 
     <div id="deleteBySenderWindow" class="hidden">
-      <h2>Delete Emails by Sender:</h2>
-      <button id="deleteBySenderConfirm">Start Deleting by Sender</button>
-      <button id="backToMenuFromSender">Back</button>
+      <h2>Delete Emails by Sender</h2>
+      <input
+        type="text"
+        id="searchSenderInput"
+        placeholder="Enter search term (e.g., 'newsletter')"
+      />
+      <button id="searchSenderButton">Search</button>
+      <select id="senderSelect" class="scrollable-dropdown hidden"></select>
+      <button id="deleteBySenderConfirm" class="hidden">
+        Delete Emails by Selected Sender
+      </button>
+      <button id="backToMenu">Back</button>
     </div>
 
     <div id="subscriptionsWindow" class="hidden">
@@ -37,7 +46,7 @@
       <button id="manageSubscriptionsConfirm">
         Start Managing Subscriptions
       </button>
-      <button id="backToMenuFromSubscriptions">Back</button>
+      <button id="backToMenu">Back</button>
     </div>
 
     <div id="customModal" class="modal">
@@ -55,7 +64,7 @@
     </div>
 
     <script src="actions/common.js"></script>
-    <script src="actions/batchDelete.js"></script>
+    <script src="actions/deleteByLabel.js"></script>
     <script src="actions/deleteBySender.js"></script>
     <script src="actions/manageSubscriptions.js"></script>
     <script src="popup.js"></script>
