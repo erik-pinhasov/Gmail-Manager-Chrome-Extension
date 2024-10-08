@@ -10,9 +10,7 @@ function batchDeleteLabel(token, labelId, labelName) {
             toggleLoadingSpinner(true); // Show the spinner during refetch
             fetchAndDisplayLabels(token, () => {
               toggleLoadingSpinner(false); // Hide the spinner once refetch is done
-              showCustomAlert(
-                `${labelName} (${totalEmails} emails) deleted successfully!`
-              );
+              showCustomAlert(`${labelName} deleted successfully!`);
             });
           });
         }
