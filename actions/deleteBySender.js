@@ -1,204 +1,277 @@
-// Fetch all emails from a specific sender and delete them
+// Utility functions for date and time formatting
+function formatDate(date) {
+  return `${String(date.getDate()).padStart(2, "0")}/${String(
+    date.getMonth() + 1
+  ).padStart(2, "0")}/${String(date.getFullYear()).slice(-2)}`;
+}
+
+function formatTime(date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(
+    date.getMinutes()
+  ).padStart(2, "0")}`;
+}
+
+// Utility function to show or hide multiple elements
+function toggleVisibility(isVisible, ...elements) {
+  elements.forEach((element) => {
+    if (isVisible) {
+      element.classList.remove("hidden");
+    } else {
+      element.classList.add("hidden");
+    }
+  });
+}
+
+// Main function to handle batch deletion by sender
 function batchDeleteSender(token, sender) {
   fetchEmails(token, "", `from:${sender}`, (totalEmails, messageIds) => {
     if (totalEmails > 0) {
-      showCustomConfirm(
-        `Are you sure you want to delete all emails from "${sender}"?`,
-        () => {
-          // Delete emails once confirmed
-          deleteEmails(token, messageIds, () => {
-            // Only reload for delete by sender to avoid affecting delete by label
-            showCustomAlert(
-              `All emails from ${sender} have been deleted.`,
-              () => {
-                location.reload(); // Reload the extension page after deletion
-              }
-            );
-          });
-        }
-      );
+      confirmDeletion(token, messageIds, sender);
     } else {
-      showCustomAlert(`No emails found from "${sender}".`);
+      showCustomModal(`No emails found from "${sender}".`);
     }
   });
 }
 
 // Search senders by query and display them with their email counts
 function fetchEmailsBySearch(token, searchTerm, callback) {
-  const sendersSet = new Set(); // Set to store unique senders
+  const sendersSet = new Set();
 
-  // Fetch emails based on the search term (this part still uses the search term)
   fetchEmails(token, "", searchTerm, (totalEmails, messageIds) => {
-    const promises = messageIds.map((messageId) =>
+    if (totalEmails === 0) {
+      toggleLoadingSpinner(false);
+      showCustomModal("No results found.");
+      return;
+    }
+
+    const senderPromises = messageIds.map((messageId) =>
       fetchEmailDetails(token, messageId).then((emailData) => {
-        if (emailData && emailData.headers) {
-          const senderHeader = emailData.headers.find(
-            (header) => header.name === "From"
-          );
-          if (senderHeader) {
-            const sender = extractEmailAddress(senderHeader.value);
-            sendersSet.add(sender); // Add unique senders to the set
-          }
-        }
+        const sender = extractSender(emailData);
+        if (sender) sendersSet.add(sender);
       })
     );
 
-    // Once we have unique senders, fetch all emails from each sender
-    Promise.all(promises).then(() => {
-      const sendersArray = Array.from(sendersSet);
-      fetchEmailsCountForSenders(token, sendersArray, callback);
-    });
+    Promise.all(senderPromises)
+      .then(() =>
+        sortSendersAndFetchCounts(token, Array.from(sendersSet), callback)
+      )
+      .catch((error) => {
+        console.error("Error processing email details:", error);
+        toggleLoadingSpinner(false);
+        showCustomModal("An error occurred while fetching email details.");
+      });
   });
+}
+
+// Helper to extract sender's email address from email data
+function extractSender(emailData) {
+  if (emailData && emailData.headers) {
+    const senderHeader = emailData.headers.find(
+      (header) => header.name === "From"
+    );
+    return senderHeader ? extractEmailAddress(senderHeader.value) : null;
+  }
+  return null;
 }
 
 // Fetch all emails for each sender and return their counts
 function fetchEmailsCountForSenders(token, sendersArray, callback) {
-  const sendersWithCounts = [];
+  const senderCounts = sendersArray.map(
+    (sender) =>
+      new Promise((resolve) => {
+        fetchEmails(token, "", `from:${sender}`, (totalEmails) => {
+          resolve({ sender, count: totalEmails || 0 });
+        });
+      })
+  );
 
-  // For each sender, fetch all emails sent by that sender
-  const promises = sendersArray.map((sender) => {
-    return new Promise((resolve) => {
-      fetchEmails(token, "", `from:${sender}`, (totalEmails) => {
-        sendersWithCounts.push({ sender, count: totalEmails });
-        resolve();
-      });
-    });
-  });
-
-  // Once all senders are processed, return the senders with their email counts
-  Promise.all(promises).then(() => {
-    callback(sendersWithCounts); // Return senders and their email counts
+  Promise.all(senderCounts).then((sendersWithCounts) => {
+    const validSenders = sendersWithCounts.filter(({ count }) => count > 0);
+    callback(validSenders);
   });
 }
 
-// Extract the email address from the 'From' header (removing display name)
+// Extract the email address from the 'From' header
 function extractEmailAddress(fromHeader) {
-  const emailRegex = /<([^>]+)>/; // Regex to match the email address inside <>
+  const emailRegex = /<([^>]+)>/;
   const match = fromHeader.match(emailRegex);
-
-  if (match && match[1]) {
-    return match[1].trim(); // Return the clean email address
-  }
-
-  return fromHeader.trim(); // Return the whole header if no <email> pattern found
+  return match ? match[1].trim() : fromHeader.trim();
 }
 
-// Fetch email details for each message
-function fetchEmailDetails(token, messageId) {
+// Fetch email details with retry mechanism
+function fetchEmailDetails(token, messageId, retries = 3) {
   const url = `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?fields=payload.headers`;
-  return fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-    .then((response) => response.json())
-    .then((data) => data.payload)
+
+  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then((response) => {
+      if (!response.ok) throw new Error("Failed to fetch email details");
+      return response.json();
+    })
+    .then((data) => data.payload || null)
     .catch((error) => {
-      console.error("Error fetching email details:", error);
-      return null;
+      if (retries > 0) {
+        console.warn(
+          `Retrying fetch for message ID: ${messageId}... (${retries} attempts left)`
+        );
+        return new Promise((resolve) =>
+          setTimeout(
+            () => resolve(fetchEmailDetails(token, messageId, retries - 1)),
+            500
+          )
+        );
+      } else {
+        console.error("Error fetching email details:", error);
+        return null;
+      }
     });
 }
 
-// Display senders with their total email counts
+// Display senders with their email counts in the dropdown
 function displaySendersWithEmailCounts(token, senders) {
   const senderSelect = document.getElementById("senderSelect");
-  senderSelect.innerHTML = ""; // Clear previous entries
+  senderSelect.innerHTML = ""; // Clear previous options
 
-  senders.forEach(({ sender, count }) => {
+  // Sort senders in ascending order of email count
+  const sortedSenders = senders.slice().sort((a, b) => a.count - b.count);
+
+  sortedSenders.forEach(({ sender, count }) => {
     const option = document.createElement("option");
     option.value = sender;
-    option.textContent = `${sender} (${count} emails)`; // Display sender with total email count
+    option.textContent = `${sender} (${count} emails)`;
     senderSelect.appendChild(option);
   });
 
-  senderSelect.classList.remove("hidden");
-  document.getElementById("deleteBySenderConfirm").classList.remove("hidden");
+  toggleVisibility(
+    true,
+    senderSelect,
+    document.getElementById("deleteBySenderConfirm"),
+    document.getElementById("viewEmailsButton")
+  );
   addViewEmailsListener(token);
 }
 
 // Add event listener for the "View Emails" button
 function addViewEmailsListener(token) {
   const viewEmailsButton = document.getElementById("viewEmailsButton");
+  viewEmailsButton.addEventListener("click", () => {
+    const senderSelect = document.getElementById("senderSelect");
+    const selectedSender = senderSelect.value;
 
-  if (!viewEmailsButton) {
-    // Create the "View Emails" button if it doesn't exist
-    const button = document.createElement("button");
-    button.id = "viewEmailsButton";
-    button.textContent = "View Emails";
-    button.classList.add("view-emails-button");
+    if (!selectedSender) {
+      showCustomModal("Please select a sender first.");
+      return;
+    }
 
-    // Append the button to the DOM above the delete button
-    document.getElementById("deleteBySenderConfirm").before(button);
-
-    // Attach the event listener to the button
-    button.addEventListener("click", () => {
-      const senderSelect = document.getElementById("senderSelect");
-      const selectedSender = senderSelect.value;
-
-      if (!selectedSender) {
-        showCustomAlert("Please select a sender first.");
-        return;
-      }
-
-      toggleLoadingSpinner(true); // Show loading animation when fetching begins
-
-      // Fetch emails for the selected sender and display them
-      fetchEmails(
-        token,
-        "", // No label ID since we are fetching by sender
-        `from:${selectedSender}`, // Query for emails from the selected sender
-        (totalEmails, messageIds) => {
-          if (totalEmails > 0) {
-            // Fetch the subjects for each email ID and display them
-            const subjectPromises = messageIds.map((messageId) =>
-              fetchEmailDetails(token, messageId).then((emailData) => {
-                if (emailData && emailData.headers) {
-                  const subjectHeader = emailData.headers.find(
-                    (header) => header.name === "Subject"
-                  );
-                  return subjectHeader ? subjectHeader.value : "(No Subject)";
-                } else {
-                  return "(No Subject)";
-                }
-              })
-            );
-
-            Promise.all(subjectPromises).then((subjects) => {
-              toggleLoadingSpinner(false); // Hide loading spinner after fetching
-              displayEmailSubjects(subjects); // Display the list of subjects
-            });
-          } else {
-            toggleLoadingSpinner(false); // Hide loading spinner if no emails are found
-            showCustomAlert(`No emails found for sender "${selectedSender}".`);
-          }
-        }
-      );
-    });
-  } else {
-    // If the button already exists, ensure it is visible
-    viewEmailsButton.classList.remove("hidden");
-  }
+    toggleLoadingSpinner(true);
+    fetchEmailsForSender(token, selectedSender);
+  });
 }
 
-// Display the list of email subjects in the UI
-function displayEmailSubjects(subjects) {
-  const emailListContainer = document.getElementById("emailListContainer");
+// Clear any previous email list displayed and hide buttons
+function clearPreviousEmailList() {
+  const senderSelect = document.getElementById("senderSelect");
+  senderSelect.innerHTML = "";
+  toggleVisibility(
+    false,
+    senderSelect,
+    document.getElementById("viewEmailsButton"),
+    document.getElementById("deleteBySenderConfirm")
+  );
+}
 
-  if (!emailListContainer) {
-    // Create the email list container if it doesn't exist
-    const container = document.createElement("div");
-    container.id = "emailListContainer";
-    container.classList.add("email-list-container");
-
-    // Append the container to the DOM right below the sender selection box
-    document.getElementById("senderSelect").after(container);
-  }
-
-  // Clear any existing content in the container
-  document.getElementById("emailListContainer").innerHTML = "";
-
-  // Populate the container with the list of subjects
-  subjects.forEach((subject, index) => {
-    const listItem = document.createElement("p");
-    listItem.textContent = `${index + 1}. ${subject}`;
-    document.getElementById("emailListContainer").appendChild(listItem);
+// Fetch emails for the selected sender and display subjects
+function fetchEmailsForSender(token, sender) {
+  fetchEmails(token, "", `from:${sender}`, (totalEmails, messageIds) => {
+    if (totalEmails > 0) {
+      fetchAndDisplayEmailSubjects(token, messageIds);
+    } else {
+      toggleLoadingSpinner(false);
+      showCustomModal(`No results found for "${sender}".`);
+    }
   });
+}
+
+// Display the email subjects in a new window
+function openSubjectListWindow(subjects) {
+  const listWindow = window.open(
+    "listPage.html",
+    "Data Table",
+    "width=800,height=600"
+  );
+  const dataPayload = {
+    title: "Email Subjects",
+    columns: [
+      { label: "Subject", key: "subject" },
+      { label: "Date", key: "date" },
+      { label: "Time", key: "time" },
+    ],
+    items: subjects,
+  };
+
+  // Function to send data to the new window
+  const sendDataToWindow = () => {
+    listWindow.postMessage(dataPayload, "*");
+    clearInterval(checkWindowInterval);
+  };
+
+  // Send data when the window loads
+  listWindow.addEventListener("load", sendDataToWindow);
+
+  // Check every 100ms if the window is open and ready to receive messages
+  const checkWindowInterval = setInterval(() => {
+    if (listWindow && !listWindow.closed) {
+      sendDataToWindow();
+    }
+  }, 100);
+}
+// Main function to fetch and display email subjects
+function fetchAndDisplayEmailSubjects(token, messageIds) {
+  const subjectPromises = messageIds.map((messageId) =>
+    getEmailDetails(token, messageId)
+  );
+
+  Promise.all(subjectPromises).then((subjects) => {
+    toggleLoadingSpinner(false);
+    const validSubjects = subjects.filter((subject) => subject !== null);
+
+    if (validSubjects.length === 0) {
+      showCustomModal("No email subjects could be retrieved.");
+    } else {
+      openSubjectListWindow(validSubjects);
+    }
+  });
+}
+
+// Sort senders by email count and fetch counts
+function sortSendersAndFetchCounts(token, sendersArray, callback) {
+  fetchEmailsCountForSenders(token, sendersArray, (sendersWithCounts) => {
+    const sortedSenders = sendersWithCounts.sort((a, b) => a.count - b.count);
+    callback(sortedSenders);
+  });
+}
+
+// Fetch and format individual email details
+function getEmailDetails(token, messageId) {
+  return fetchEmailDetails(token, messageId).then((emailData) => {
+    if (emailData && emailData.headers) {
+      const subject =
+        getHeaderValue(emailData.headers, "Subject") || "(No Subject)";
+      const date = new Date(
+        getHeaderValue(emailData.headers, "Date") || Date.now()
+      );
+
+      return {
+        subject,
+        date: formatDate(date),
+        time: formatTime(date),
+      };
+    }
+    return null; // Return null if data is missing or fetch failed
+  });
+}
+
+// Extract specific header value from email headers
+function getHeaderValue(headers, headerName) {
+  const header = headers.find((h) => h.name === headerName);
+  return header ? header.value : null;
 }

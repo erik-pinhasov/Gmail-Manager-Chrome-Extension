@@ -11,7 +11,7 @@
 
     <div id="welcomeMessage"></div>
 
-    <div id="mainMenu">
+    <div id="mainWindow">
       <button id="deleteByLabel">Batch Delete Emails</button>
       <button id="deleteBySender">Delete Emails by Sender</button>
       <button id="subscriptions">Manage Subscriptions</button>
@@ -31,10 +31,11 @@
       <input
         type="text"
         id="searchSenderInput"
-        placeholder="Enter search term (e.g., 'newsletter')"
+        placeholder="Enter search term"
       />
       <button id="searchSenderButton">Search</button>
       <select id="senderSelect" class="scrollable-dropdown hidden"></select>
+      <button id="viewEmailsButton" class="hidden">View Emails</button>
       <button id="deleteBySenderConfirm" class="hidden">
         Delete Emails by Selected Sender
       </button>

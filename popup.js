@@ -7,7 +7,7 @@ function toggleLoadingSpinner(show) {
 // UI windows
 function showWindow(windowToShow) {
   const windows = [
-    "mainMenu",
+    "mainWindow",
     "deleteByLabelWindow",
     "deleteBySenderWindow",
     "subscriptionsWindow",
@@ -33,7 +33,7 @@ function deleteByLabelHandler() {
   document.getElementById("deleteByLabel").addEventListener("click", () => {
     toggleLoadingSpinner(true);
     fetchToken(true, (token) => {
-      fetchAndDisplayLabels(
+      fetchLabels(
         token,
         () => {
           toggleLoadingSpinner(false);
@@ -70,12 +70,13 @@ function deleteBySenderHandler() {
         .value.trim();
 
       if (!searchTerm) {
-        showCustomAlert("Please enter a search term.");
+        showCustomModal("Please enter a search term.");
         return;
       }
 
       toggleLoadingSpinner(true);
       fetchToken(true, (token) => {
+        clearPreviousEmailList();
         fetchEmailsBySearch(token, searchTerm, (senders) => {
           toggleLoadingSpinner(false);
           displaySendersWithEmailCounts(token, senders);
@@ -97,7 +98,7 @@ function deleteBySenderHandler() {
 // Initialize back button handlers
 function initializeBackButtonHandlers() {
   document.querySelectorAll("#backToMenu").forEach((button) => {
-    button.addEventListener("click", () => showWindow("mainMenu"));
+    button.addEventListener("click", () => location.reload());
   });
 }
 

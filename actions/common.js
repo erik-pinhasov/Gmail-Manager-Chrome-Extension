@@ -12,32 +12,13 @@ function fetchToken(interactive = true, callback) {
   );
 }
 
-// UI Modals
-function showCustomConfirm(message, onConfirm) {
+// UI Modal (combined for Confirm and Alert)
+function showCustomModal(message, callback, isConfirm = false) {
   const modal = document.getElementById("customModal");
   const modalMessage = document.getElementById("modalMessage");
   const modalButton = document.getElementById("modalButton");
 
-  setupModal(modal, modalMessage, modalButton, message, onConfirm, true);
-}
-
-function showCustomAlert(message, callback) {
-  const modal = document.getElementById("customModal");
-  const modalMessage = document.getElementById("modalMessage");
-  const modalButton = document.getElementById("modalButton");
-
-  setupModal(modal, modalMessage, modalButton, message, callback, false);
-}
-
-// Setup modals
-function setupModal(
-  modal,
-  modalMessage,
-  modalButton,
-  message,
-  callback,
-  isConfirm
-) {
+  // Set up the modal content
   modalMessage.textContent = message;
   modal.style.display = "flex";
   modalButton.onclick = null;
@@ -45,6 +26,7 @@ function setupModal(
   if (isConfirm) {
     setupConfirmModal(modal, modalButton, callback);
   } else {
+    // Alert modal setup
     modalButton.textContent = "OK";
     modalButton.onclick = () => {
       modal.style.display = "none";
@@ -53,6 +35,7 @@ function setupModal(
   }
 }
 
+// Function to set up Confirm modal
 function setupConfirmModal(modal, modalButton, callback) {
   const cancelButton = document.createElement("button");
   cancelButton.textContent = "Cancel";
@@ -60,12 +43,14 @@ function setupConfirmModal(modal, modalButton, callback) {
   const modalContent = document.querySelector(".modal-content");
   modalContent.appendChild(cancelButton);
 
+  // Confirm action
   modalButton.onclick = () => {
     modal.style.display = "none";
     modalContent.removeChild(cancelButton);
     callback();
   };
 
+  // Cancel action
   cancelButton.onclick = () => {
     modal.style.display = "none";
     modalContent.removeChild(cancelButton);
@@ -73,15 +58,21 @@ function setupConfirmModal(modal, modalButton, callback) {
 }
 
 // Fetch total emails with optional query (e.g., by label or by sender)
-// Fetch total emails with optional query (e.g., by label or by sender)
-function fetchEmails(token, labelId = "", query = "", callback) {
+function fetchEmails(
+  token,
+  labelId = "",
+  query = "",
+  callback,
+  retries = 3,
+  maxErrors = 10
+) {
   let totalEmails = 0;
   let messageIds = [];
-  const maxResults = 500;
+  let errorCount = 0; // Track number of errors
 
   function getEmails(pageToken = null) {
-    let url = `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${query}`;
-    if (labelId) url += `&labelIds=${labelId}`; // If labelId is provided, fetch by label
+    let url = `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=500&q=${query}`;
+    if (labelId) url += `&labelIds=${labelId}`;
     if (pageToken) url += `&pageToken=${pageToken}`;
 
     fetch(url, {
@@ -106,90 +97,33 @@ function fetchEmails(token, labelId = "", query = "", callback) {
         }
       })
       .catch((error) => {
+        errorCount++;
         console.error("Error fetching emails:", error);
-        callback(0, []); // Return 0 emails if fetching fails
+
+        if (retries > 0 && errorCount < maxErrors) {
+          console.warn(`Retrying fetchEmails... (${retries} attempts left)`);
+          setTimeout(
+            () =>
+              fetchEmails(
+                token,
+                labelId,
+                query,
+                callback,
+                retries - 1,
+                maxErrors
+              ),
+            500
+          );
+        } else {
+          console.error(
+            `Max retries or errors reached. Failed to fetch emails.`
+          );
+          callback(0, []); // Return 0 emails if fetching fails completely
+        }
       });
   }
 
   getEmails(); // Start fetching
-}
-
-// Fetch and Display Labels
-function fetchAndDisplayLabels(token, callback, forceRefresh = false) {
-  const labelSelect = document.getElementById("labelSelect");
-  labelSelect.innerHTML = "";
-
-  const url = "https://www.googleapis.com/gmail/v1/users/me/labels";
-
-  // Fetch labels from Gmail API
-  fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: forceRefresh ? "no-store" : "default", // Use no-store if forcing a refresh
-  })
-    .then((response) => response.json())
-    .then((data) => {
-      const labelsWithCounts = [];
-
-      // Fetch email counts for each label
-      data.labels.forEach((label) => {
-        const formattedLabelName = formatLabelName(label.name);
-        fetchEmails(token, label.id, "", (emailCount) => {
-          labelsWithCounts.push({
-            labelId: label.id,
-            labelName: formattedLabelName,
-            emailCount,
-          });
-
-          // Sort and display labels after fetching all counts
-          if (labelsWithCounts.length === data.labels.length) {
-            labelsWithCounts.sort((a, b) => b.emailCount - a.emailCount);
-            displayLabels(labelSelect, labelsWithCounts);
-            callback();
-          }
-        });
-      });
-    })
-    .catch((error) => {
-      displayErrorLabel(labelSelect);
-      console.error("Error fetching labels:", error);
-      callback();
-    });
-}
-
-// Display labels with email count
-function displayLabels(labelSelect, labelsWithCounts) {
-  labelSelect.innerHTML = "";
-  labelsWithCounts.forEach(({ labelId, labelName, emailCount }) => {
-    const option = document.createElement("option");
-    option.value = labelId;
-    option.textContent = `${labelName} (${emailCount} emails)`;
-    labelSelect.appendChild(option);
-  });
-  labelSelect.style.display = "block";
-}
-
-// Display error if labels can't be fetched
-function displayErrorLabel(labelSelect) {
-  labelSelect.innerHTML = "";
-  const errorMessage = document.createElement("option");
-  errorMessage.textContent = "Error loading categories";
-  labelSelect.appendChild(errorMessage);
-}
-
-function formatLabelName(labelName) {
-  if (labelName.startsWith("CATEGORY_")) {
-    labelName = labelName.replace("CATEGORY_", "");
-  }
-  const words = labelName.split("_");
-  const formattedWords = [];
-
-  for (let i = 0; i < words.length; i++) {
-    const word = words[i];
-    const formattedWord = word.charAt(0) + word.slice(1).toLowerCase();
-    formattedWords.push(formattedWord);
-  }
-
-  return formattedWords.join(" ");
 }
 
 // Delete emails in batches
@@ -215,10 +149,35 @@ function deleteEmails(token, messageIds, callback) {
         }
       })
       .catch((error) => {
-        showCustomAlert("Error occurred while deleting emails.");
+        showCustomModal("Error occurred while deleting emails.");
         console.error("Error deleting emails:", error);
       });
   };
 
   deleteInBatches(messageIds);
+}
+
+// Helper function to confirm deletion
+function confirmDeletion(token, messageIds, itemName) {
+  showCustomModal(
+    `Delete all emails from "${itemName}"?`,
+    () => {
+      deleteEmails(token, messageIds, () => {
+        showCustomModal(`${itemName} deleted successfully!`, () => {
+          location.reload(); // Reload after user acknowledges the success message
+        });
+      });
+    },
+    true // isConfirm = true for confirmation modal
+  );
+}
+
+// Utility function to show an element
+function showElement(element) {
+  element.classList.remove("hidden");
+}
+
+// Utility function to hide an element
+function hideElement(element) {
+  element.classList.add("hidden");
 }
