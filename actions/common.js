@@ -1,18 +1,20 @@
-// Token Handling
-function fetchToken(interactive = true, callback) {
-  chrome.runtime.sendMessage(
-    { action: "getAuthToken", interactive: interactive },
-    (response) => {
-      if (response.token) {
-        callback(response.token);
-      } else {
-        alert("Authorization failed. Please try again.");
-      }
-    }
-  );
+// Utility function to show an element
+function showElement(element) {
+  element.classList.remove("hidden");
 }
 
-// UI Modal (combined for Confirm and Alert)
+// Utility function to hide an element
+function hideElement(element) {
+  element.classList.add("hidden");
+}
+
+// Utility function to close the modal
+function closeModal(modal, modalContent, cancelButton) {
+  modal.style.display = "none";
+  modalContent.removeChild(cancelButton);
+}
+
+// Function to show a custom modal (combined for Confirm and Alert)
 function showCustomModal(message, callback, isConfirm = false) {
   const modal = document.getElementById("customModal");
   const modalMessage = document.getElementById("modalMessage");
@@ -26,13 +28,17 @@ function showCustomModal(message, callback, isConfirm = false) {
   if (isConfirm) {
     setupConfirmModal(modal, modalButton, callback);
   } else {
-    // Alert modal setup
-    modalButton.textContent = "OK";
-    modalButton.onclick = () => {
-      modal.style.display = "none";
-      if (callback) callback();
-    };
+    setupAlertModal(modal, modalButton, callback);
   }
+}
+
+// Function to set up Alert modal
+function setupAlertModal(modal, modalButton, callback) {
+  modalButton.textContent = "OK";
+  modalButton.onclick = () => {
+    modal.style.display = "none";
+    if (callback) callback();
+  };
 }
 
 // Function to set up Confirm modal
@@ -45,85 +51,120 @@ function setupConfirmModal(modal, modalButton, callback) {
 
   // Confirm action
   modalButton.onclick = () => {
-    modal.style.display = "none";
-    modalContent.removeChild(cancelButton);
+    closeModal(modal, modalContent, cancelButton);
     callback();
   };
 
   // Cancel action
   cancelButton.onclick = () => {
-    modal.style.display = "none";
-    modalContent.removeChild(cancelButton);
+    closeModal(modal, modalContent, cancelButton);
   };
 }
 
+// Helper function to confirm deletion
+function confirmDeletion(token, messageIds, itemName) {
+  showCustomModal(
+    `Delete all emails from "${itemName}"?`,
+    () => {
+      deleteEmails(token, messageIds, () => {
+        showCustomModal(`${itemName} deleted successfully!`, () => {
+          location.reload();
+        });
+      });
+    },
+    true // isConfirm = true for confirmation modal
+  );
+}
+
 // Fetch total emails with optional query (e.g., by label or by sender)
-function fetchEmails(
-  token,
-  labelId = "",
-  query = "",
-  callback,
-  retries = 3,
-  maxErrors = 10
-) {
+function fetchEmails(token, labelId = "", query = "", callback, retries = 3) {
+  const maxErrors = 10;
   let totalEmails = 0;
   let messageIds = [];
-  let errorCount = 0; // Track number of errors
+  let errorCount = 0;
 
-  function getEmails(pageToken = null) {
+  function buildUrl(pageToken) {
     let url = `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=500&q=${query}`;
     if (labelId) url += `&labelIds=${labelId}`;
     if (pageToken) url += `&pageToken=${pageToken}`;
+    return url;
+  }
+
+  function handleResponse(response) {
+    if (!response.ok)
+      throw new Error(`Failed to fetch emails for label: ${labelId}`);
+    return response.json();
+  }
+
+  function processEmailData(data) {
+    if (data.messages) {
+      totalEmails += data.messages.length;
+      messageIds = [...messageIds, ...data.messages.map((msg) => msg.id)];
+    }
+
+    if (data.nextPageToken) {
+      getEmails(data.nextPageToken); // Recursively fetch next pages
+    } else {
+      callback(totalEmails, messageIds); // Pass totalEmails and messageIds to callback
+    }
+  }
+
+  function handleError(error) {
+    errorCount++;
+    console.error("Error fetching emails:", error);
+
+    if (retries > 0 && errorCount < maxErrors) {
+      console.warn(`Retrying fetchEmails... (${retries} attempts left)`);
+      setTimeout(
+        () => fetchEmails(token, labelId, query, callback, retries - 1),
+        500
+      );
+    } else {
+      console.error(`Max retries or errors reached. Failed to fetch emails.`);
+      callback(0, []); // Return 0 emails if fetching fails completely
+    }
+  }
+
+  function getEmails(pageToken = null) {
+    const url = buildUrl(pageToken);
 
     fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Failed to fetch emails for label: ${labelId}`);
-        }
-        return response.json();
-      })
-      .then((data) => {
-        if (data.messages) {
-          totalEmails += data.messages.length;
-          messageIds = [...messageIds, ...data.messages.map((msg) => msg.id)];
-        }
-
-        if (data.nextPageToken) {
-          getEmails(data.nextPageToken); // Recursively fetch next pages
-        } else {
-          callback(totalEmails, messageIds); // Pass totalEmails and messageIds to callback
-        }
-      })
-      .catch((error) => {
-        errorCount++;
-        console.error("Error fetching emails:", error);
-
-        if (retries > 0 && errorCount < maxErrors) {
-          console.warn(`Retrying fetchEmails... (${retries} attempts left)`);
-          setTimeout(
-            () =>
-              fetchEmails(
-                token,
-                labelId,
-                query,
-                callback,
-                retries - 1,
-                maxErrors
-              ),
-            500
-          );
-        } else {
-          console.error(
-            `Max retries or errors reached. Failed to fetch emails.`
-          );
-          callback(0, []); // Return 0 emails if fetching fails completely
-        }
-      });
+      .then(handleResponse)
+      .then(processEmailData)
+      .catch(handleError);
   }
 
   getEmails(); // Start fetching
+}
+
+// Fetch email details with retry mechanism
+function fetchEmailDetails(token, messageId, retries = 3) {
+  const url = `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?fields=payload.headers`;
+
+  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then((response) => {
+      if (!response.ok) throw new Error("Failed to fetch email details");
+      return response.json();
+    })
+    .then((data) => data.payload || null)
+    .catch((error) => {
+      if (retries > 0) {
+        console.warn(
+          `Retrying fetch for message ID: ${messageId}... (${retries} attempts left)`
+        );
+        return new Promise((resolve) =>
+          setTimeout(
+            () => resolve(fetchEmailDetails(token, messageId, retries - 1)),
+            500
+          )
+        );
+      } else {
+        console.error("Error fetching email details:", error);
+        return null;
+      }
+    });
 }
 
 // Delete emails in batches
@@ -155,29 +196,4 @@ function deleteEmails(token, messageIds, callback) {
   };
 
   deleteInBatches(messageIds);
-}
-
-// Helper function to confirm deletion
-function confirmDeletion(token, messageIds, itemName) {
-  showCustomModal(
-    `Delete all emails from "${itemName}"?`,
-    () => {
-      deleteEmails(token, messageIds, () => {
-        showCustomModal(`${itemName} deleted successfully!`, () => {
-          location.reload(); // Reload after user acknowledges the success message
-        });
-      });
-    },
-    true // isConfirm = true for confirmation modal
-  );
-}
-
-// Utility function to show an element
-function showElement(element) {
-  element.classList.remove("hidden");
-}
-
-// Utility function to hide an element
-function hideElement(element) {
-  element.classList.add("hidden");
 }

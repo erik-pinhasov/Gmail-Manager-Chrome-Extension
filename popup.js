@@ -1,3 +1,17 @@
+// Token Handling
+function fetchToken(interactive = true, callback) {
+  chrome.runtime.sendMessage(
+    { action: "getAuthToken", interactive: interactive },
+    (response) => {
+      if (response.token) {
+        callback(response.token);
+      } else {
+        alert("Authorization failed. Please try again.");
+      }
+    }
+  );
+}
+
 // Show/hide the loading spinner with the overlay
 function toggleLoadingSpinner(show) {
   const overlay = document.getElementById("loadingOverlay");

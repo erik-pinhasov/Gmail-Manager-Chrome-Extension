@@ -98,34 +98,6 @@ function extractEmailAddress(fromHeader) {
   return match ? match[1].trim() : fromHeader.trim();
 }
 
-// Fetch email details with retry mechanism
-function fetchEmailDetails(token, messageId, retries = 3) {
-  const url = `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?fields=payload.headers`;
-
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    .then((response) => {
-      if (!response.ok) throw new Error("Failed to fetch email details");
-      return response.json();
-    })
-    .then((data) => data.payload || null)
-    .catch((error) => {
-      if (retries > 0) {
-        console.warn(
-          `Retrying fetch for message ID: ${messageId}... (${retries} attempts left)`
-        );
-        return new Promise((resolve) =>
-          setTimeout(
-            () => resolve(fetchEmailDetails(token, messageId, retries - 1)),
-            500
-          )
-        );
-      } else {
-        console.error("Error fetching email details:", error);
-        return null;
-      }
-    });
-}
-
 // Display senders with their email counts in the dropdown
 function displaySendersWithEmailCounts(token, senders) {
   const senderSelect = document.getElementById("senderSelect");
