@@ -12,7 +12,8 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Open Gmail Manager"
+    "default_title": "Open Gmail Manager",
+    "default_popup": "popup.html"
   },
   "host_permissions": [
     "https://www.googleapis.com/",
