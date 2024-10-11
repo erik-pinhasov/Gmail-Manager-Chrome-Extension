@@ -3,7 +3,7 @@
   "name": "Gmail Email Fetcher",
   "version": "1.0",
   "description": "A Chrome extension to fetch emails from Gmail.",
-  "permissions": ["identity", "identity.email", "background"],
+  "permissions": ["identity", "identity.email", "background", "storage"],
   "oauth2": {
     "client_id": "801952120012-u2u1kc0s06d5mseoli7e07q7o8b0intp.apps.googleusercontent.com",
     "scopes": ["https://mail.google.com/"]

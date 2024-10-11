@@ -11,17 +11,6 @@ function formatTime(date) {
   ).padStart(2, "0")}`;
 }
 
-// Utility function to show or hide multiple elements
-function toggleVisibility(isVisible, ...elements) {
-  elements.forEach((element) => {
-    if (isVisible) {
-      element.classList.remove("hidden");
-    } else {
-      element.classList.add("hidden");
-    }
-  });
-}
-
 // Main function to handle batch deletion by sender
 function batchDeleteSender(token, sender) {
   fetchEmails(token, "", `from:${sender}`, (totalEmails, messageIds) => {

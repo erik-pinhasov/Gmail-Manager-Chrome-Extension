@@ -9,12 +9,16 @@
   <body>
     <h1>Gmail Manager</h1>
 
-    <div id="welcomeMessage"></div>
+    <div id="loginWindow">
+      <button id="loginButton">Login</button>
+    </div>
 
-    <div id="mainWindow">
+    <div id="mainWindow" class="hidden">
+      <h2 id="welcomeMessage"></h2>
       <button id="deleteByLabel">Batch Delete Emails</button>
       <button id="deleteBySender">Delete Emails by Sender</button>
       <button id="subscriptions">Manage Subscriptions</button>
+      <button id="logoutButton" , style="width: 30%">Logout</button>
     </div>
 
     <div id="deleteByLabelWindow" class="hidden">

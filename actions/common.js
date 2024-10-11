@@ -1,13 +1,3 @@
-// Utility function to show an element
-function showElement(element) {
-  element.classList.remove("hidden");
-}
-
-// Utility function to hide an element
-function hideElement(element) {
-  element.classList.add("hidden");
-}
-
 // Utility function to close the modal
 function closeModal(modal, modalContent, cancelButton) {
   modal.style.display = "none";
@@ -61,6 +51,17 @@ function setupConfirmModal(modal, modalButton, callback) {
   };
 }
 
+// Utility function to show or hide multiple elements
+function toggleVisibility(isVisible, ...elements) {
+  elements.forEach((element) => {
+    if (isVisible) {
+      element.classList.remove("hidden");
+    } else {
+      element.classList.add("hidden");
+    }
+  });
+}
+
 // Helper function to confirm deletion
 function confirmDeletion(token, messageIds, itemName) {
   showCustomModal(
@@ -78,10 +79,8 @@ function confirmDeletion(token, messageIds, itemName) {
 
 // Fetch total emails with optional query (e.g., by label or by sender)
 function fetchEmails(token, labelId = "", query = "", callback, retries = 3) {
-  const maxErrors = 10;
   let totalEmails = 0;
   let messageIds = [];
-  let errorCount = 0;
 
   function buildUrl(pageToken) {
     let url = `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=500&q=${query}`;
@@ -110,17 +109,14 @@ function fetchEmails(token, labelId = "", query = "", callback, retries = 3) {
   }
 
   function handleError(error) {
-    errorCount++;
-    console.error("Error fetching emails:", error);
-
-    if (retries > 0 && errorCount < maxErrors) {
+    if (retries > 0) {
       console.warn(`Retrying fetchEmails... (${retries} attempts left)`);
       setTimeout(
         () => fetchEmails(token, labelId, query, callback, retries - 1),
         500
       );
     } else {
-      console.error(`Max retries or errors reached. Failed to fetch emails.`);
+      console.error(`Failed to fetch emails.`);
       callback(0, []); // Return 0 emails if fetching fails completely
     }
   }
