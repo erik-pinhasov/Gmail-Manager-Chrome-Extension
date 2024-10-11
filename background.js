@@ -10,12 +10,22 @@ function requestAuthToken(interactive, callback) {
   });
 }
 
-// Listener for messages from popup to get the token
+// Handle popup creation
+chrome.action.onClicked.addListener(() => {
+  chrome.windows.create({
+    url: "popup.html",
+    type: "popup",
+    width: 400,
+    height: 600,
+  });
+});
+
+// Message listener for OAuth token requests
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "getAuthToken") {
     const interactive = message.interactive || false;
     requestAuthToken(interactive, (token) => {
-      sendResponse({ token: token });
+      sendResponse({ token });
     });
     return true;
   }
