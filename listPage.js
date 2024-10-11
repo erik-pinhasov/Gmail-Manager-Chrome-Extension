@@ -63,7 +63,6 @@ window.addEventListener("message", (event) => {
 
   // Set the table title
   document.getElementById("tableTitle").textContent = title;
-  console.log("HERE");
   // Set table headers and data
   columns = receivedColumns;
   dataItems = items;
