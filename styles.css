@@ -2,6 +2,11 @@ body {
   padding: 10px;
   width: 280px;
   height: 450px;
+  height: 100%;
+}
+
+.body-login-height {
+  height: 50%;
 }
 
 h2 {
@@ -42,7 +47,7 @@ h2 {
 button {
   display: block;
   width: 100%;
-  padding: 8px;
+  padding: 10px;
   margin: 20px 0 10px;
   font-size: 18px;
   background-color: #4285f4;

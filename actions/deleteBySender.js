@@ -1,13 +1,14 @@
-// Utility functions for date and time formatting
+// Date formatting
 function formatDate(date) {
   return `${String(date.getDate()).padStart(2, "0")}/${String(
     date.getMonth() + 1
   ).padStart(2, "0")}/${String(date.getFullYear()).slice(-2)}`;
 }
 
-function formatTime(date) {
-  return `${String(date.getHours()).padStart(2, "0")}:${String(
-    date.getMinutes()
+// Time formatting
+function formatTime(time) {
+  return `${String(time.getHours()).padStart(2, "0")}:${String(
+    time.getMinutes()
   ).padStart(2, "0")}`;
 }
 
@@ -55,28 +56,25 @@ function fetchEmailsBySearch(token, searchTerm, callback) {
 // Helper to extract sender's email address from email data
 function extractSender(emailData) {
   if (emailData && emailData.headers) {
-    const senderHeader = emailData.headers.find(
-      (header) => header.name === "From"
-    );
-    return senderHeader ? extractEmailAddress(senderHeader.value) : null;
+    const senderHeaderValue = getHeaderValue(emailData.headers, "From");
+    return senderHeaderValue ? extractEmailAddress(senderHeaderValue) : null;
   }
   return null;
 }
 
 // Fetch all emails for each sender and return their counts
-function fetchEmailsCountForSenders(token, sendersArray, callback) {
+function countEmailsForSenders(token, sendersArray, callback) {
   const senderCounts = sendersArray.map(
     (sender) =>
       new Promise((resolve) => {
         fetchEmails(token, "", `from:${sender}`, (totalEmails) => {
-          resolve({ sender, count: totalEmails || 0 });
+          resolve({ sender, count: totalEmails });
         });
       })
   );
 
-  Promise.all(senderCounts).then((sendersWithCounts) => {
-    const validSenders = sendersWithCounts.filter(({ count }) => count > 0);
-    callback(validSenders);
+  Promise.all(senderCounts).then((resolvedSenderCounts) => {
+    callback(resolvedSenderCounts);
   });
 }
 
@@ -205,7 +203,7 @@ function fetchAndDisplayEmailSubjects(token, messageIds) {
 
 // Sort senders by email count and fetch counts
 function sortSendersAndFetchCounts(token, sendersArray, callback) {
-  fetchEmailsCountForSenders(token, sendersArray, (sendersWithCounts) => {
+  countEmailsForSenders(token, sendersArray, (sendersWithCounts) => {
     const sortedSenders = sendersWithCounts.sort((a, b) => a.count - b.count);
     callback(sortedSenders);
   });

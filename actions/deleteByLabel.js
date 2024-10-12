@@ -9,16 +9,14 @@ function batchDeleteLabel(token, labelId, labelName) {
   });
 }
 
-// Fetch and Display Labels
-function fetchLabels(token, callback, forceRefresh = false) {
+// Fetch, sort and display labels/categories with email counts
+function fetchLabels(token, callback) {
   const labelSelect = document.getElementById("labelSelect");
-
   const url = "https://www.googleapis.com/gmail/v1/users/me/labels";
 
-  // Fetch labels from Gmail API
   fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
-    cache: forceRefresh ? "no-store" : "default", // Use no-store if forcing a refresh
+    cache: "no-store",
   })
     .then((response) => response.json())
     .then((data) => {
@@ -60,6 +58,7 @@ function displayLabels(labelSelect, labelsWithCounts) {
   labelSelect.style.display = "block";
 }
 
+// Format category name for display
 function formatLabelName(labelName) {
   if (labelName.startsWith("CATEGORY_")) {
     labelName = labelName.replace("CATEGORY_", "");
