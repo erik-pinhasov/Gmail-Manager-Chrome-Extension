@@ -83,27 +83,35 @@ function showWindow(windowToShow) {
   });
 }
 
-// Handle delete by label flow
 function deleteByLabelHandler() {
+  let labelsWithCounts = [];
   document.getElementById("deleteByLabel").addEventListener("click", () => {
     toggleLoadingSpinner(true);
     fetchToken(true, (token) => {
-      fetchLabels(token, () => {
+      fetchLabels(token, (fetchedLabels) => {
+        labelsWithCounts = fetchedLabels;
         toggleLoadingSpinner(false);
         showWindow("deleteByLabelWindow");
       });
     });
   });
-
   document.getElementById("deleteSelected").addEventListener("click", () => {
     const labelSelect = document.getElementById("labelSelect");
     const selectedLabelId = labelSelect.value;
     const selectedLabelName =
       labelSelect.options[labelSelect.selectedIndex].text;
 
-    fetchToken(false, (token) => {
-      batchDeleteLabel(token, selectedLabelId, selectedLabelName);
-    });
+    const selectedLabel = labelsWithCounts.find(
+      (label) => label.labelId === selectedLabelId
+    );
+
+    if (selectedLabel) {
+      fetchToken(false, (token) => {
+        confirmDeletion(token, selectedLabel.messageIds, selectedLabelName);
+      });
+    } else {
+      showCustomModal("Selected label not found.");
+    }
   });
 }
 

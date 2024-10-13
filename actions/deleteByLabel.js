@@ -1,13 +1,13 @@
-// Main function to handle batch deletion by label
-function batchDeleteLabel(token, labelId, labelName) {
-  fetchEmails(token, labelId, "", (totalEmails, messageIds) => {
-    if (totalEmails > 0) {
-      confirmDeletion(token, messageIds, labelName);
-    } else {
-      showCustomModal(`No emails found under "${labelName}".`);
-    }
-  });
-}
+// // Main function to handle batch deletion by label
+// function batchDeleteLabel(token, labelId, labelName) {
+//   fetchEmails(token, labelId, "", (totalEmails, messageIds) => {
+//     if (totalEmails > 0) {
+//       confirmDeletion(token, messageIds, labelName);
+//     } else {
+//       showCustomModal(`No emails found under "${labelName}".`);
+//     }
+//   });
+// }
 
 // Fetch, sort and display labels/categories with email counts
 function fetchLabels(token, callback) {
@@ -23,27 +23,31 @@ function fetchLabels(token, callback) {
       const labelsWithCounts = [];
 
       // Fetch email counts for each label
-      data.labels.forEach((label) => {
-        const formattedLabelName = formatLabelName(label.name);
-        fetchEmails(token, label.id, "", (emailCount) => {
-          labelsWithCounts.push({
-            labelId: label.id,
-            labelName: formattedLabelName,
-            emailCount,
-          });
+      const labelPromises = data.labels.map(
+        (label) =>
+          new Promise((resolve) => {
+            const formattedLabelName = formatLabelName(label.name);
+            fetchEmails(token, label.id, "", (emailCount, messageIds) => {
+              labelsWithCounts.push({
+                labelId: label.id,
+                labelName: formattedLabelName,
+                emailCount,
+                messageIds, // Save message IDs for later use
+              });
+              resolve();
+            });
+          })
+      );
 
-          // Sort and display labels after fetching all counts
-          if (labelsWithCounts.length === data.labels.length) {
-            labelsWithCounts.sort((a, b) => b.emailCount - a.emailCount);
-            displayLabels(labelSelect, labelsWithCounts);
-            callback();
-          }
-        });
+      Promise.all(labelPromises).then(() => {
+        labelsWithCounts.sort((a, b) => b.emailCount - a.emailCount);
+        displayLabels(labelSelect, labelsWithCounts);
+        callback(labelsWithCounts); // Return the fetched labels and their email counts
       });
     })
     .catch((error) => {
       console.error("Error fetching labels:", error);
-      callback();
+      callback([]);
     });
 }
 
