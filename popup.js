@@ -5,7 +5,7 @@ function login() {
       showCustomModal("Login failed. Please try again.");
     } else {
       chrome.storage.local.set({ loggedIn: true, token: token }, () => {
-        initializeUserDetails();
+        initUserDetails();
         showWindow("mainWindow");
       });
     }
@@ -37,7 +37,7 @@ function logout() {
 }
 
 // Show user email address in main window
-function initializeUserDetails() {
+function initUserDetails() {
   chrome.identity.getProfileUserInfo({ accountStatus: "ANY" }, (userInfo) => {
     const message = document.getElementById("welcomeMessage");
     if (userInfo.email) {
@@ -48,7 +48,7 @@ function initializeUserDetails() {
   });
 }
 
-// Token Handling
+// Token handling
 function fetchToken(interactive = true, callback) {
   chrome.runtime.sendMessage(
     { action: "getAuthToken", interactive: interactive },
@@ -63,7 +63,7 @@ function fetchToken(interactive = true, callback) {
 }
 
 // Show/hide the loading spinner with the overlay
-function toggleLoadingSpinner(show) {
+function loadingSpinner(show) {
   const overlay = document.getElementById("loadingOverlay");
   overlay.classList.toggle("hidden", !show);
 }
@@ -83,35 +83,25 @@ function showWindow(windowToShow) {
   });
 }
 
+// Handle delete by label flow
 function deleteByLabelHandler() {
-  let labelsWithCounts = [];
   document.getElementById("deleteByLabel").addEventListener("click", () => {
-    toggleLoadingSpinner(true);
+    loadingSpinner(true);
     fetchToken(true, (token) => {
-      fetchLabels(token, (fetchedLabels) => {
-        labelsWithCounts = fetchedLabels;
-        toggleLoadingSpinner(false);
+      fetchLabels(token, () => {
+        loadingSpinner(false);
         showWindow("deleteByLabelWindow");
       });
     });
   });
+
   document.getElementById("deleteSelected").addEventListener("click", () => {
     const labelSelect = document.getElementById("labelSelect");
     const selectedLabelId = labelSelect.value;
-    const selectedLabelName =
-      labelSelect.options[labelSelect.selectedIndex].text;
-
-    const selectedLabel = labelsWithCounts.find(
-      (label) => label.labelId === selectedLabelId
-    );
-
-    if (selectedLabel) {
-      fetchToken(false, (token) => {
-        confirmDeletion(token, selectedLabel.messageIds, selectedLabelName);
-      });
-    } else {
-      showCustomModal("Selected label not found.");
-    }
+    const selectedLabel = labelSelect.options[labelSelect.selectedIndex].text;
+    fetchToken(false, (token) => {
+      batchDeleteLabel(token, selectedLabelId, selectedLabel);
+    });
   });
 }
 
@@ -133,11 +123,11 @@ function deleteBySenderHandler() {
         return;
       }
 
-      toggleLoadingSpinner(true);
+      loadingSpinner(true);
       fetchToken(true, (token) => {
         clearPreviousEmailList();
         fetchEmailsBySearch(token, searchTerm, (senders) => {
-          toggleLoadingSpinner(false);
+          loadingSpinner(false);
           displaySendersWithEmailCounts(token, senders);
         });
       });
@@ -170,7 +160,7 @@ function initializePopup() {
     if (data.loggedIn && data.token) {
       chrome.identity.getAuthToken({ interactive: false }, (token) => {
         if (token) {
-          initializeUserDetails();
+          initUserDetails();
           showWindow("mainWindow");
         } else {
           showWindow("loginWindow");

@@ -1,3 +1,10 @@
+// Cache object to store email data
+const emailCache = {
+  senders: new Map(),
+  messageIds: new Map(),
+  emailDetails: new Map(),
+};
+
 // Date formatting
 function formatDate(date) {
   return `${String(date.getDate()).padStart(2, "0")}/${String(
@@ -14,22 +21,24 @@ function formatTime(time) {
 
 // Main function to handle batch deletion by sender
 function batchDeleteSender(token, sender) {
-  fetchEmails(token, "", `from:${sender}`, (totalEmails, messageIds) => {
-    if (totalEmails > 0) {
-      confirmDeletion(token, messageIds, sender);
-    } else {
-      showCustomModal(`No emails found from "${sender}".`);
-    }
-  });
+  const cacheKey = `from:${sender}`;
+  const messageIds = emailCache.messageIds.get(cacheKey);
+  confirmDeletion(token, messageIds, sender);
 }
 
 // Search senders by query and display them with their email counts
 function fetchEmailsBySearch(token, searchTerm, callback) {
+  if (emailCache.senders.has(searchTerm)) {
+    const cachedSenders = emailCache.senders.get(searchTerm);
+    fetchAndSortSenders(token, cachedSenders, callback);
+    return;
+  }
+
   const sendersSet = new Set();
 
   fetchEmails(token, "", searchTerm, (totalEmails, messageIds) => {
     if (totalEmails === 0) {
-      toggleLoadingSpinner(false);
+      loadingSpinner(false);
       showCustomModal("No results found.");
       return;
     }
@@ -42,12 +51,14 @@ function fetchEmailsBySearch(token, searchTerm, callback) {
     );
 
     Promise.all(senderPromises)
-      .then(() =>
-        sortSendersAndFetchCounts(token, Array.from(sendersSet), callback)
-      )
+      .then(() => {
+        const sendersArray = Array.from(sendersSet);
+        emailCache.senders.set(searchTerm, sendersArray);
+        fetchAndSortSenders(token, sendersArray, callback);
+      })
       .catch((error) => {
         console.error("Error processing email details:", error);
-        toggleLoadingSpinner(false);
+        loadingSpinner(false);
         showCustomModal("An error occurred while fetching email details.");
       });
   });
@@ -62,22 +73,6 @@ function extractSender(emailData) {
   return null;
 }
 
-// Fetch all emails for each sender and return their counts
-function countEmailsForSenders(token, sendersArray, callback) {
-  const senderCounts = sendersArray.map(
-    (sender) =>
-      new Promise((resolve) => {
-        fetchEmails(token, "", `from:${sender}`, (totalEmails) => {
-          resolve({ sender, count: totalEmails });
-        });
-      })
-  );
-
-  Promise.all(senderCounts).then((resolvedSenderCounts) => {
-    callback(resolvedSenderCounts);
-  });
-}
-
 // Extract the email address from the 'From' header
 function extractEmailAddress(fromHeader) {
   const emailRegex = /<([^>]+)>/;
@@ -88,12 +83,9 @@ function extractEmailAddress(fromHeader) {
 // Display senders with their email counts in the dropdown
 function displaySendersWithEmailCounts(token, senders) {
   const senderSelect = document.getElementById("senderSelect");
-  senderSelect.innerHTML = ""; // Clear previous options
+  senderSelect.innerHTML = "";
 
-  // Sort senders in ascending order of email count
-  const sortedSenders = senders.slice().sort((a, b) => a.count - b.count);
-
-  sortedSenders.forEach(({ sender, count }) => {
+  senders.forEach(({ sender, count }) => {
     const option = document.createElement("option");
     option.value = sender;
     option.textContent = `${sender} (${count} emails)`;
@@ -121,7 +113,7 @@ function addViewEmailsListener(token) {
       return;
     }
 
-    toggleLoadingSpinner(true);
+    loadingSpinner(true);
     fetchEmailsForSender(token, selectedSender);
   });
 }
@@ -140,14 +132,9 @@ function clearPreviousEmailList() {
 
 // Fetch emails for the selected sender and display subjects
 function fetchEmailsForSender(token, sender) {
-  fetchEmails(token, "", `from:${sender}`, (totalEmails, messageIds) => {
-    if (totalEmails > 0) {
-      fetchAndDisplayEmailSubjects(token, messageIds);
-    } else {
-      toggleLoadingSpinner(false);
-      showCustomModal(`No results found for "${sender}".`);
-    }
-  });
+  const cacheKey = `from:${sender}`;
+  const messageIds = emailCache.messageIds.get(cacheKey);
+  fetchAndDisplayEmailSubjects(token, messageIds);
 }
 
 // Display the email subjects in a new window
@@ -183,6 +170,7 @@ function openSubjectListWindow(subjects) {
     }
   }, 100);
 }
+
 // Main function to fetch and display email subjects
 function fetchAndDisplayEmailSubjects(token, messageIds) {
   const subjectPromises = messageIds.map((messageId) =>
@@ -190,7 +178,7 @@ function fetchAndDisplayEmailSubjects(token, messageIds) {
   );
 
   Promise.all(subjectPromises).then((subjects) => {
-    toggleLoadingSpinner(false);
+    loadingSpinner(false);
     const validSubjects = subjects.filter((subject) => subject !== null);
 
     if (validSubjects.length === 0) {
@@ -201,16 +189,33 @@ function fetchAndDisplayEmailSubjects(token, messageIds) {
   });
 }
 
-// Sort senders by email count and fetch counts
-function sortSendersAndFetchCounts(token, sendersArray, callback) {
-  countEmailsForSenders(token, sendersArray, (sendersWithCounts) => {
-    const sortedSenders = sendersWithCounts.sort((a, b) => a.count - b.count);
+// Fetch all emails for each sender, return their counts, and sort by email count
+function fetchAndSortSenders(token, sendersArray, callback) {
+  const senderCounts = sendersArray.map(
+    (sender) =>
+      new Promise((resolve) => {
+        const query = `in:anywhere from:${sender}`;
+        fetchEmails(token, "", query, (totalEmails, messageIds) => {
+          emailCache.messageIds.set(`from:${sender}`, messageIds);
+          resolve({ sender, count: totalEmails });
+        });
+      })
+  );
+
+  Promise.all(senderCounts).then((resolvedSenderCounts) => {
+    const sortedSenders = resolvedSenderCounts.sort(
+      (a, b) => a.count - b.count
+    );
     callback(sortedSenders);
   });
 }
 
 // Fetch and format individual email details
 function getEmailDetails(token, messageId) {
+  if (emailCache.emailDetails.has(messageId)) {
+    return Promise.resolve(emailCache.emailDetails.get(messageId));
+  }
+
   return fetchEmailDetails(token, messageId).then((emailData) => {
     if (emailData && emailData.headers) {
       const subject =
@@ -218,12 +223,13 @@ function getEmailDetails(token, messageId) {
       const date = new Date(
         getHeaderValue(emailData.headers, "Date") || Date.now()
       );
-
-      return {
+      const formattedData = {
         subject,
         date: formatDate(date),
         time: formatTime(date),
       };
+      emailCache.emailDetails.set(messageId, formattedData);
+      return formattedData;
     }
     return null; // Return null if data is missing or fetch failed
   });
