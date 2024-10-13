@@ -1,64 +1,54 @@
+// Login with Google OAuth2
 function login() {
   chrome.identity.getAuthToken({ interactive: true }, (token) => {
     if (chrome.runtime.lastError) {
       showCustomModal("Login failed. Please try again.");
     } else {
       chrome.storage.local.set({ loggedIn: true, token: token }, () => {
-        initializeUserDetails(token);
+        initUserDetails();
         showWindow("mainWindow");
       });
     }
   });
 }
 
+// Logout with Google OAuth2
 function logout() {
   chrome.identity.getAuthToken({ interactive: false }, (token) => {
-    if (token) {
-      fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`)
-        .then(() => {
-          chrome.identity.removeCachedAuthToken({ token: token }, () => {
-            if (chrome.runtime.lastError) {
-              console.error(
-                "Error removing token:",
-                chrome.runtime.lastError.message
-              );
-            } else {
-              chrome.identity.clearAllCachedAuthTokens(() => {
-                chrome.storage.local.set(
-                  { loggedIn: false, token: null },
-                  () => {
-                    showCustomModal("Logged out successfully.");
-                    showWindow("loginWindow");
-                  }
-                );
-              });
-            }
-          });
-        })
-        .catch((error) => {
-          console.error("Error revoking token:", error);
-          showWindow("loginWindow");
-        });
-    } else {
+    if (!token) {
       console.error("No token found to remove.");
       showWindow("loginWindow");
+      return;
     }
+
+    fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`)
+      .then(() => chrome.identity.removeCachedAuthToken({ token }))
+      .then(() => chrome.identity.clearAllCachedAuthTokens())
+      .then(() => chrome.storage.local.set({ loggedIn: false, token: null }))
+      .then(() => {
+        showCustomModal("Logged out successfully.");
+        showWindow("loginWindow");
+      })
+      .catch((error) => {
+        console.error("Error during logout process:", error);
+        showWindow("loginWindow");
+      });
   });
 }
 
-function initializeUserDetails(token) {
+// Show user email address in main window
+function initUserDetails() {
   chrome.identity.getProfileUserInfo({ accountStatus: "ANY" }, (userInfo) => {
+    const message = document.getElementById("welcomeMessage");
     if (userInfo.email) {
-      document.getElementById(
-        "welcomeMessage"
-      ).textContent = `Welcome, ${userInfo.email}`;
+      message.textContent = `Welcome, ${userInfo.email}`;
     } else {
-      document.getElementById("welcomeMessage").textContent = "Welcome, User";
+      message.textContent = "Welcome, User";
     }
   });
 }
 
-// Token Handling
+// Token handling
 function fetchToken(interactive = true, callback) {
   chrome.runtime.sendMessage(
     { action: "getAuthToken", interactive: interactive },
@@ -73,12 +63,12 @@ function fetchToken(interactive = true, callback) {
 }
 
 // Show/hide the loading spinner with the overlay
-function toggleLoadingSpinner(show) {
+function loadingSpinner(show) {
   const overlay = document.getElementById("loadingOverlay");
   overlay.classList.toggle("hidden", !show);
 }
 
-// UI windows
+// Show UI window and hide others
 function showWindow(windowToShow) {
   const windows = [
     "loginWindow",
@@ -91,37 +81,26 @@ function showWindow(windowToShow) {
     const element = document.getElementById(window);
     element.classList.toggle("hidden", window !== windowToShow);
   });
-  if (windowToShow === "loginWindow") {
-    document.body.style.height = "50%";
-  } else {
-    document.body.style.height = "100%";
-  }
 }
 
 // Handle delete by label flow
 function deleteByLabelHandler() {
   document.getElementById("deleteByLabel").addEventListener("click", () => {
-    toggleLoadingSpinner(true);
+    loadingSpinner(true);
     fetchToken(true, (token) => {
-      fetchLabels(
-        token,
-        () => {
-          toggleLoadingSpinner(false);
-          showWindow("deleteByLabelWindow");
-        },
-        true
-      );
+      fetchLabels(token, () => {
+        loadingSpinner(false);
+        showWindow("deleteByLabelWindow");
+      });
     });
   });
 
   document.getElementById("deleteSelected").addEventListener("click", () => {
     const labelSelect = document.getElementById("labelSelect");
     const selectedLabelId = labelSelect.value;
-    const selectedLabelName =
-      labelSelect.options[labelSelect.selectedIndex].text;
-
+    const selectedLabel = labelSelect.options[labelSelect.selectedIndex].text;
     fetchToken(false, (token) => {
-      batchDeleteLabel(token, selectedLabelId, selectedLabelName);
+      batchDeleteLabel(token, selectedLabelId, selectedLabel);
     });
   });
 }
@@ -144,11 +123,11 @@ function deleteBySenderHandler() {
         return;
       }
 
-      toggleLoadingSpinner(true);
+      loadingSpinner(true);
       fetchToken(true, (token) => {
         clearPreviousEmailList();
         fetchEmailsBySearch(token, searchTerm, (senders) => {
-          toggleLoadingSpinner(false);
+          loadingSpinner(false);
           displaySendersWithEmailCounts(token, senders);
         });
       });
@@ -179,10 +158,9 @@ function initializePopup() {
 
   chrome.storage.local.get(["loggedIn", "token"], (data) => {
     if (data.loggedIn && data.token) {
-      console.log(data.token);
       chrome.identity.getAuthToken({ interactive: false }, (token) => {
         if (token) {
-          initializeUserDetails(token);
+          initUserDetails();
           showWindow("mainWindow");
         } else {
           showWindow("loginWindow");
