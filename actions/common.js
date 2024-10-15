@@ -7,11 +7,10 @@ function closeModal(modal, modalContent, cancelButton) {
 // Function to show a custom modal (combined for Confirm and Alert)
 function showCustomModal(message, callback, isConfirm = false) {
   const modal = document.getElementById("customModal");
-  const modalMessage = document.getElementById("modalMessage");
   const modalButton = document.getElementById("modalButton");
 
   // Set up the modal content
-  modalMessage.textContent = message;
+  document.getElementById("modalMessage").textContent = message;
   modal.style.display = "flex";
   modalButton.onclick = null;
 
@@ -36,7 +35,7 @@ function setupConfirmModal(modal, modalButton, callback) {
   const cancelButton = document.createElement("button");
   cancelButton.textContent = "Cancel";
   modalButton.textContent = "Confirm";
-  const modalContent = document.querySelector(".modal-content");
+  const modalContent = document.querySelector(".modalContent");
   modalContent.appendChild(cancelButton);
 
   // Confirm action
@@ -49,17 +48,6 @@ function setupConfirmModal(modal, modalButton, callback) {
   cancelButton.onclick = () => {
     closeModal(modal, modalContent, cancelButton);
   };
-}
-
-// Utility function to show or hide multiple elements
-function toggleVisibility(isVisible, ...elements) {
-  elements.forEach((element) => {
-    if (isVisible) {
-      element.classList.remove("hidden");
-    } else {
-      element.classList.add("hidden");
-    }
-  });
 }
 
 // Helper function to confirm deletion

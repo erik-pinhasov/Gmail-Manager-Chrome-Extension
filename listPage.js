@@ -69,3 +69,37 @@ window.addEventListener("message", (event) => {
   setTableHeaders(columns);
   displayPage(currentPage);
 });
+
+// Display the email subjects in a new window
+function openSubjectListWindow(subjects) {
+  const listWindow = window.open(
+    "listPage.html",
+    "Data Table",
+    "width=800,height=600"
+  );
+  const dataPayload = {
+    title: "Email Subjects",
+    columns: [
+      { label: "Subject", key: "subject" },
+      { label: "Date", key: "date" },
+      { label: "Time", key: "time" },
+    ],
+    items: subjects,
+  };
+
+  // Function to send data to the new window
+  const sendDataToWindow = () => {
+    listWindow.postMessage(dataPayload, "*");
+    clearInterval(checkWindowInterval);
+  };
+
+  // Send data when the window loads
+  listWindow.addEventListener("load", sendDataToWindow);
+
+  // Check every 100ms if the window is open and ready to receive messages
+  const checkWindowInterval = setInterval(() => {
+    if (listWindow && !listWindow.closed) {
+      sendDataToWindow();
+    }
+  }, 100);
+}

@@ -17,40 +17,43 @@ function batchDeleteLabel(token, labelId, labelName) {
 
 // Fetch and Display Labels
 function fetchLabels(token, callback) {
-  const labelSelect = document.getElementById("labelSelect");
   const url = "https://www.googleapis.com/gmail/v1/users/me/labels";
 
-  // Fetch labels from Gmail API
   fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   })
     .then((response) => response.json())
-    .then((data) => {
-      labelCache.labels = [];
-      const fetchPromises = data.labels.map((label) => {
-        const formattedLabelName = formatLabelName(label.name);
-        return fetchEmailsForLabel(token, label.id).then((emailData) => {
-          labelCache.labels.push({
-            labelId: label.id,
-            labelName: formattedLabelName,
-            emailCount: emailData.totalEmails,
-          });
-          labelCache.emailCounts.set(label.id, emailData.totalEmails);
-          labelCache.messageIds.set(label.id, emailData.messageIds);
-        });
-      });
-
-      Promise.all(fetchPromises).then(() => {
-        labelCache.labels.sort((a, b) => b.emailCount - a.emailCount);
-        displayLabels(labelSelect, labelCache.labels);
-        callback();
-      });
+    .then((data) => processLabels(token, data.labels))
+    .then(() => {
+      displayLabels();
+      callback();
     })
     .catch((error) => {
       console.error("Error fetching labels:", error);
       callback();
     });
+}
+
+// Process labels and fetch email counts
+function processLabels(token, labels) {
+  labelCache.labels = [];
+  const fetchPromises = labels.map((label) =>
+    fetchEmailsForLabel(token, label.id).then((emailData) => {
+      const formattedLabelName = formatLabelName(label.name);
+      labelCache.labels.push({
+        labelId: label.id,
+        labelName: formattedLabelName,
+        emailCount: emailData.totalEmails,
+      });
+      labelCache.emailCounts.set(label.id, emailData.totalEmails);
+      labelCache.messageIds.set(label.id, emailData.messageIds);
+    })
+  );
+
+  return Promise.all(fetchPromises).then(() => {
+    labelCache.labels.sort((a, b) => b.emailCount - a.emailCount);
+  });
 }
 
 // Fetch emails for a specific label
@@ -63,9 +66,10 @@ function fetchEmailsForLabel(token, labelId) {
 }
 
 // Display labels with email count
-function displayLabels(labelSelect, labels) {
+function displayLabels() {
+  const labelSelect = document.getElementById("labelSelect");
   labelSelect.innerHTML = "";
-  labels.forEach(({ labelId, labelName, emailCount }) => {
+  labelCache.labels.forEach(({ labelId, labelName, emailCount }) => {
     const option = document.createElement("option");
     option.value = labelId;
     option.textContent = `${labelName} (${emailCount} emails)`;

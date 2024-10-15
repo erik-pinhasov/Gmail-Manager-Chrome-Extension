@@ -73,8 +73,8 @@ function showWindow(windowToShow) {
   const windows = [
     "loginWindow",
     "mainWindow",
-    "deleteByLabelWindow",
-    "deleteBySenderWindow",
+    "byLabelWindow",
+    "bySenderWindow",
     "subscriptionsWindow",
   ];
   windows.forEach((window) => {
@@ -85,17 +85,17 @@ function showWindow(windowToShow) {
 
 // Handle delete by label flow
 function deleteByLabelHandler() {
-  document.getElementById("deleteByLabel").addEventListener("click", () => {
+  document.getElementById("byLabel").addEventListener("click", () => {
     loadingSpinner(true);
     fetchToken(true, (token) => {
       fetchLabels(token, () => {
         loadingSpinner(false);
-        showWindow("deleteByLabelWindow");
+        showWindow("byLabelWindow");
       });
     });
   });
 
-  document.getElementById("deleteSelected").addEventListener("click", () => {
+  document.getElementById("deleteByLabel").addEventListener("click", () => {
     const labelSelect = document.getElementById("labelSelect");
     const selectedLabelId = labelSelect.value;
     const selectedLabel = labelSelect.options[labelSelect.selectedIndex].text;
@@ -107,41 +107,33 @@ function deleteByLabelHandler() {
 
 // Handle delete by sender flow
 function deleteBySenderHandler() {
-  document.getElementById("deleteBySender").addEventListener("click", () => {
-    showWindow("deleteBySenderWindow");
+  document.getElementById("bySender").addEventListener("click", () => {
+    showWindow("bySenderWindow");
   });
 
-  document
-    .getElementById("searchSenderButton")
-    .addEventListener("click", () => {
-      const searchTerm = document
-        .getElementById("searchSenderInput")
-        .value.trim();
+  document.getElementById("searchSender").addEventListener("click", () => {
+    const searchTerm = document.getElementById("searchInput").value.trim();
 
-      if (!searchTerm) {
-        showCustomModal("Please enter a search term.");
-        return;
-      }
+    if (!searchTerm) {
+      showCustomModal("Please enter a search term.");
+      return;
+    }
 
-      loadingSpinner(true);
-      fetchToken(true, (token) => {
-        clearPreviousEmailList();
-        fetchEmailsBySearch(token, searchTerm, (senders) => {
-          loadingSpinner(false);
-          displaySendersWithEmailCounts(token, senders);
-        });
+    loadingSpinner(true);
+    fetchToken(true, (token) => {
+      clearPreviousEmailList();
+      fetchEmailsBySearch(token, searchTerm, (senders) => {
+        loadingSpinner(false);
+        displaySendersEmailCounts(token, senders);
       });
     });
+  });
 
-  document
-    .getElementById("deleteBySenderConfirm")
-    .addEventListener("click", () => {
-      fetchToken(false, (token) => {
-        const senderSelect = document.getElementById("senderSelect");
-        const selectedSender = senderSelect.value;
-        batchDeleteSender(token, selectedSender);
-      });
+  document.getElementById("deleteBySender").addEventListener("click", () => {
+    fetchToken(false, (token) => {
+      batchDeleteSender(token, document.getElementById("senderSelect").value);
     });
+  });
 }
 
 // Initialize back button handlers
