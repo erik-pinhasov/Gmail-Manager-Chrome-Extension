@@ -11,7 +11,7 @@
       <img src="title.png" alt="Gmail Manager" class="titleImage" />
     </div>
 
-    <div id="loginWindow">
+    <div id="loginWindow" class="hidden">
       <button id="loginButton" class="googleBtn">
         <img src="https://img.icons8.com/color/48/000000/google-logo.png" />
         <span>Continue with Google</span>
@@ -55,11 +55,10 @@
       <button id="backToMenu">Back</button>
     </div>
 
-    <div id="subscriptionsWindow" class="hidden">
-      <h2>Manage Subscriptions:</h2>
-      <button id="manageSubscriptionsConfirm">
-        Start Managing Subscriptions
-      </button>
+    <div id="subsWindow" class="hidden">
+      <h2>Select Address and Unsubscribe</h2>
+      <select id="subSelect" class="scrollableDropdown"></select>
+      <button id="unsubButton">Unsubscribe</button>
       <button id="backToMenu">Back</button>
     </div>
 

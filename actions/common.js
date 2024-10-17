@@ -67,60 +67,51 @@ function confirmDeletion(token, messageIds, itemName) {
 
 // Fetch total emails with optional query (e.g., by label or by sender)
 function fetchEmails(token, labelId = "", query = "", callback, retries = 3) {
-  let totalEmails = 0;
-  let messageIds = [];
+  let emailCount = 0;
+  let emailIds = [];
 
-  function buildUrl(pageToken) {
-    let url = `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=500&q=${query}`;
-    if (labelId) url += `&labelIds=${labelId}`;
-    if (pageToken) url += `&pageToken=${pageToken}`;
-    return url;
-  }
+  function fetchPage(pageToken = null) {
+    // Build URL with query parameters
+    const params = new URLSearchParams({
+      maxResults: 500,
+      q: query,
+      ...(labelId && { labelIds: labelId }),
+      ...(pageToken && { pageToken }),
+    });
 
-  function handleResponse(response) {
-    if (!response.ok)
-      throw new Error(`Failed to fetch emails for label: ${labelId}`);
-    return response.json();
-  }
-
-  function processEmailData(data) {
-    if (data.messages) {
-      totalEmails += data.messages.length;
-      messageIds = [...messageIds, ...data.messages.map((msg) => msg.id)];
-    }
-
-    if (data.nextPageToken) {
-      getEmails(data.nextPageToken); // Recursively fetch next pages
-    } else {
-      callback(totalEmails, messageIds); // Pass totalEmails and messageIds to callback
-    }
-  }
-
-  function handleError(error) {
-    if (retries > 0) {
-      console.warn(`Retrying fetchEmails... (${retries} attempts left)`);
-      setTimeout(
-        () => fetchEmails(token, labelId, query, callback, retries - 1),
-        500
-      );
-    } else {
-      console.error(`Failed to fetch emails.`);
-      callback(0, []); // Return 0 emails if fetching fails completely
-    }
-  }
-
-  function getEmails(pageToken = null) {
-    const url = buildUrl(pageToken);
-
-    fetch(url, {
+    // Fetch emails from Gmail API
+    fetch(`https://www.googleapis.com/gmail/v1/users/me/messages?${params}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then(handleResponse)
-      .then(processEmailData)
-      .catch(handleError);
+      .then((response) =>
+        response.ok ? response.json() : Promise.reject("Fetch failed")
+      )
+      .then((data) => {
+        // Process current page
+        if (data.messages) {
+          emailCount += data.messages.length;
+          emailIds.push(...data.messages.map((msg) => msg.id));
+        }
+
+        // Handle pagination
+        data.nextPageToken
+          ? fetchPage(data.nextPageToken)
+          : callback(emailCount, emailIds);
+      })
+      .catch((error) => {
+        if (retries > 0) {
+          setTimeout(
+            () => fetchEmails(token, labelId, query, callback, retries - 1),
+            500
+          );
+        } else {
+          console.error("Failed to fetch emails:", error);
+          callback(0, []);
+        }
+      });
   }
 
-  getEmails(); // Start fetching
+  fetchPage();
 }
 
 // Fetch email details with retry mechanism

@@ -75,7 +75,7 @@ function showWindow(windowToShow) {
     "mainWindow",
     "byLabelWindow",
     "bySenderWindow",
-    "subscriptionsWindow",
+    "subsWindow",
   ];
   windows.forEach((window) => {
     const element = document.getElementById(window);
@@ -136,8 +136,38 @@ function deleteBySenderHandler() {
   });
 }
 
+function subscriptionHandler() {
+  document.getElementById("subscriptions").addEventListener("click", () => {
+    loadingSpinner(true); // Show the loading spinner while fetching
+    fetchToken(true, (token) => {
+      subscriptionCache.emails = []; // Reset cache before fetching
+      subscriptionCache.emailCount = 0; // Reset count
+      fetchAllSubscriptions(token, () => {
+        loadingSpinner(false); // Hide the spinner when done fetching
+        showWindow("subsWindow"); // Show the subscription window
+        // Display the count of unique email addresses
+        alert(
+          `Found ${subscriptionCache.emailCount} unique subscription email addresses.`
+        );
+      });
+    });
+  });
+
+  // When the 'Unsubscribe' button is clicked
+  document.getElementById("unsubButton").addEventListener("click", () => {
+    const subSelect = document.getElementById("subSelect");
+    const selectedEmail = subSelect.value; // Get the selected email address
+    fetchToken(false, (token) => {
+      unsubscribeFromEmail(token, selectedEmail); // Perform unsubscribe action
+    });
+  });
+}
+
 // Initialize back button handlers
-function initializeBackButtonHandlers() {
+function initializeButtonsHandler() {
+  document.getElementById("loginButton").addEventListener("click", login);
+  document.getElementById("logoutButton").addEventListener("click", logout);
+
   document.querySelectorAll("#backToMenu").forEach((button) => {
     button.addEventListener("click", () => location.reload());
   });
@@ -145,27 +175,27 @@ function initializeBackButtonHandlers() {
 
 // Initialize the popup
 function initializePopup() {
-  document.getElementById("loginButton").addEventListener("click", login);
-  document.getElementById("logoutButton").addEventListener("click", logout);
-
-  chrome.storage.local.get(["loggedIn", "token"], (data) => {
-    if (data.loggedIn && data.token) {
-      chrome.identity.getAuthToken({ interactive: false }, (token) => {
-        if (token) {
-          initUserDetails();
-          showWindow("mainWindow");
-        } else {
-          showWindow("loginWindow");
-        }
-      });
-    } else {
-      showWindow("loginWindow");
-    }
+  document.addEventListener("DOMContentLoaded", () => {
+    chrome.storage.local.get(["loggedIn", "token"], (data) => {
+      if (data.loggedIn && data.token) {
+        chrome.identity.getAuthToken({ interactive: false }, (token) => {
+          if (token) {
+            initUserDetails();
+            showWindow("mainWindow");
+          } else {
+            showWindow("loginWindow");
+          }
+        });
+      } else {
+        showWindow("loginWindow");
+      }
+    });
   });
 
-  initializeBackButtonHandlers();
+  initializeButtonsHandler();
   deleteByLabelHandler();
   deleteBySenderHandler();
+  subscriptionHandler();
 }
 
 initializePopup();
