@@ -136,29 +136,22 @@ function deleteBySenderHandler() {
   });
 }
 
+// Handle subscription flow
 function subscriptionHandler() {
   document.getElementById("subscriptions").addEventListener("click", () => {
-    loadingSpinner(true); // Show the loading spinner while fetching
-    fetchToken(true, (token) => {
-      subscriptionCache.emails = []; // Reset cache before fetching
-      subscriptionCache.emailCount = 0; // Reset count
-      fetchAllSubscriptions(token, () => {
-        loadingSpinner(false); // Hide the spinner when done fetching
-        showWindow("subsWindow"); // Show the subscription window
-        // Display the count of unique email addresses
-        alert(
-          `Found ${subscriptionCache.emailCount} unique subscription email addresses.`
-        );
-      });
-    });
+    populateYearOptions();
+    showWindow("subsWindow");
   });
 
-  // When the 'Unsubscribe' button is clicked
-  document.getElementById("unsubButton").addEventListener("click", () => {
-    const subSelect = document.getElementById("subSelect");
-    const selectedEmail = subSelect.value; // Get the selected email address
-    fetchToken(false, (token) => {
-      unsubscribeFromEmail(token, selectedEmail); // Perform unsubscribe action
+  document.getElementById("fetchByYear").addEventListener("click", () => {
+    const yearSelect = document.getElementById("yearSelect");
+    const selectedYear = yearSelect.value;
+    loadingSpinner(true);
+    handleFetchSubscriptionsByYear(selectedYear, (dataPayload) => {
+      loadingSpinner(false);
+      if (dataPayload.dataItems.length === 0)
+        showCustomModal("No subscriptions found for the selected year.");
+      else openDataWindow("listPage.html", dataPayload);
     });
   });
 }

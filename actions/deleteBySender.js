@@ -144,7 +144,17 @@ function fetchAndDisplayEmailSubjects(token, messageIds) {
     if (validSubjects.length === 0) {
       showCustomModal("No email subjects could be retrieved.");
     } else {
-      openSubjectListWindow(validSubjects);
+      const dataPayload = {
+        tableTitle: "Email Subjects",
+        columns: [
+          { label: "Subject", key: "subject" },
+          { label: "Date", key: "date" },
+          { label: "Time", key: "time" },
+        ],
+        dataItems: validSubjects,
+        rowsPerPage: 100,
+      };
+      openDataWindow("listPage.html", dataPayload);
     }
   });
 }
@@ -193,10 +203,4 @@ function formatEmailData(data) {
     date: formatDate(date),
     time: formatTime(date),
   };
-}
-
-// Extract header value from email headers
-function getHeaderValue(headers, headerName) {
-  const header = headers.find((h) => h.name === headerName);
-  return header ? header.value : null;
 }

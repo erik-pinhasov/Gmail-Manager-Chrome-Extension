@@ -9,7 +9,6 @@ function showCustomModal(message, callback, isConfirm = false) {
   const modal = document.getElementById("customModal");
   const modalButton = document.getElementById("modalButton");
 
-  // Set up the modal content
   document.getElementById("modalMessage").textContent = message;
   modal.style.display = "flex";
   modalButton.onclick = null;
@@ -38,13 +37,11 @@ function setupConfirmModal(modal, modalButton, callback) {
   const modalContent = document.querySelector(".modalContent");
   modalContent.appendChild(cancelButton);
 
-  // Confirm action
   modalButton.onclick = () => {
     closeModal(modal, modalContent, cancelButton);
     callback();
   };
 
-  // Cancel action
   cancelButton.onclick = () => {
     closeModal(modal, modalContent, cancelButton);
   };
@@ -61,7 +58,7 @@ function confirmDeletion(token, messageIds, itemName) {
         });
       });
     },
-    true // isConfirm = true for confirmation modal
+    true
   );
 }
 
@@ -71,7 +68,6 @@ function fetchEmails(token, labelId = "", query = "", callback, retries = 3) {
   let emailIds = [];
 
   function fetchPage(pageToken = null) {
-    // Build URL with query parameters
     const params = new URLSearchParams({
       maxResults: 500,
       q: query,
@@ -87,13 +83,11 @@ function fetchEmails(token, labelId = "", query = "", callback, retries = 3) {
         response.ok ? response.json() : Promise.reject("Fetch failed")
       )
       .then((data) => {
-        // Process current page
         if (data.messages) {
           emailCount += data.messages.length;
           emailIds.push(...data.messages.map((msg) => msg.id));
         }
 
-        // Handle pagination
         data.nextPageToken
           ? fetchPage(data.nextPageToken)
           : callback(emailCount, emailIds);
@@ -159,9 +153,9 @@ function deleteEmails(token, messageIds, callback) {
     })
       .then(() => {
         if (remaining.length > 0) {
-          deleteInBatches(remaining); // Recursively delete remaining batches
+          deleteInBatches(remaining);
         } else {
-          callback(); // Call the callback once all emails are deleted
+          callback();
         }
       })
       .catch((error) => {
@@ -171,4 +165,10 @@ function deleteEmails(token, messageIds, callback) {
   };
 
   deleteInBatches(messageIds);
+}
+
+// Extract header value from email headers
+function getHeaderValue(headers, headerName) {
+  const header = headers.find((h) => h.name === headerName);
+  return header ? header.value : null;
 }

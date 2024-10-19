@@ -1,55 +1,61 @@
-const rowsPerPage = 100;
-let dataItems = [];
-let currentPage = 1;
-let columns = [];
+const defaultConfig = {
+  rowsPerPage: 100,
+  columns: [],
+  dataItems: [],
+  currentPage: 1,
+  tableTitle: "",
+  tableBodyId: "tableBody",
+  tableHeadersId: "tableHeaders",
+  paginationId: "pagination",
+  tableTitleId: "tableTitle",
+  windowWidth: 800,
+  windowHeight: 600,
+};
 
-// Function to display a specific page of data
-function displayPage(page) {
-  const tableBody = document.getElementById("tableBody");
-  tableBody.innerHTML = ""; // Clear previous rows
+function displayPage(config, page) {
+  const tableBody = document.getElementById(config.tableBodyId);
+  tableBody.innerHTML = "";
 
-  const start = (page - 1) * rowsPerPage;
-  const end = start + rowsPerPage;
-  const pageData = dataItems.slice(start, end);
+  const start = (page - 1) * config.rowsPerPage;
+  const pageData = config.dataItems.slice(start, start + config.rowsPerPage);
 
   pageData.forEach((item, index) => {
     const row = tableBody.insertRow();
-    row.insertCell(0).textContent = start + index + 1; // Row number
-    columns.forEach((column, colIndex) => {
-      row.insertCell(colIndex + 1).textContent = item[column.key];
+    row.insertCell(0).textContent = start + index + 1;
+
+    config.columns.forEach((column, colIndex) => {
+      const cell = row.insertCell(colIndex + 1);
+      cell[column.key === "actions" ? "innerHTML" : "textContent"] =
+        item[column.key];
     });
   });
 
-  updatePagination(page);
+  updatePagination(config, page);
 }
 
-// Function to create pagination controls
-function updatePagination(page) {
-  const pagination = document.getElementById("pagination");
-  pagination.innerHTML = ""; // Clear previous buttons
+function updatePagination(config, page) {
+  const pagination = document.getElementById(config.paginationId);
+  pagination.innerHTML = "";
 
-  const totalPages = Math.ceil(dataItems.length / rowsPerPage);
+  const totalPages = Math.ceil(config.dataItems.length / config.rowsPerPage);
+
   for (let i = 1; i <= totalPages; i++) {
     const button = document.createElement("button");
     button.textContent = i;
     button.disabled = i === page;
-    button.addEventListener("click", () => {
-      currentPage = i;
-      displayPage(currentPage);
-    });
+    button.onclick = () => {
+      config.currentPage = i;
+      displayPage(config, i);
+    };
     pagination.appendChild(button);
   }
 }
 
-// Function to set the table headers
-function setTableHeaders(headers) {
-  const tableHeaders = document.getElementById("tableHeaders");
-  tableHeaders.innerHTML = ""; // Clear any existing headers
+function setTableHeaders(config) {
+  const tableHeaders = document.getElementById(config.tableHeadersId);
+  tableHeaders.innerHTML = "";
 
-  const numberHeader = document.createElement("th");
-  numberHeader.textContent = "Number";
-  tableHeaders.appendChild(numberHeader);
-
+  const headers = [{ label: "Number" }, ...config.columns];
   headers.forEach((header) => {
     const th = document.createElement("th");
     th.textContent = header.label;
@@ -57,49 +63,60 @@ function setTableHeaders(headers) {
   });
 }
 
-// Event listener for receiving data and configuring table
-window.addEventListener("message", (event) => {
-  const { title, columns: receivedColumns, items } = event.data;
+function initializeTable(config) {
+  const mergedConfig = { ...defaultConfig, ...config };
+  const titleElement = document.getElementById(mergedConfig.tableTitleId);
 
-  // Set the table title
-  document.getElementById("tableTitle").textContent = title;
-  // Set table headers and data
-  columns = receivedColumns;
-  dataItems = items;
-  setTableHeaders(columns);
-  displayPage(currentPage);
-});
+  const tableBody = document.getElementById(mergedConfig.tableBodyId);
+  tableBody.innerHTML = "";
 
-// Display the email subjects in a new window
-function openSubjectListWindow(subjects) {
-  const listWindow = window.open(
-    "listPage.html",
-    "Data Table",
-    "width=800,height=600"
-  );
-  const dataPayload = {
-    title: "Email Subjects",
-    columns: [
-      { label: "Subject", key: "subject" },
-      { label: "Date", key: "date" },
-      { label: "Time", key: "time" },
-    ],
-    items: subjects,
-  };
-
-  // Function to send data to the new window
-  const sendDataToWindow = () => {
-    listWindow.postMessage(dataPayload, "*");
-    clearInterval(checkWindowInterval);
-  };
-
-  // Send data when the window loads
-  listWindow.addEventListener("load", sendDataToWindow);
-
-  // Check every 100ms if the window is open and ready to receive messages
-  const checkWindowInterval = setInterval(() => {
-    if (listWindow && !listWindow.closed) {
-      sendDataToWindow();
-    }
-  }, 100);
+  setTableHeaders(mergedConfig);
+  displayPage(mergedConfig, mergedConfig.currentPage);
 }
+
+function openDataWindow(url, dataPayload) {
+  const listWindow = window.open(
+    url,
+    "Data Table",
+    `width=${defaultConfig.windowWidth},height=${defaultConfig.windowHeight}`
+  );
+
+  const sendData = () => {
+    if (listWindow && !listWindow.closed) {
+      listWindow.postMessage(dataPayload, "*");
+      clearInterval(checkInterval);
+    }
+  };
+
+  listWindow.addEventListener("load", sendData);
+  const checkInterval = setInterval(sendData, 100);
+}
+
+function handleUnsubscribe(event) {
+  const button = event.target;
+  const email = decodeURIComponent(button.getAttribute("data-email"));
+
+  const unsubscribeLink = decodeURIComponent(
+    button.getAttribute("data-unsubscribe")
+  );
+
+  if (unsubscribeLink) {
+    window.open(unsubscribeLink, "_blank");
+
+    button.style.backgroundColor = "green";
+    button.disabled = false; // Ensure the button is not disabled
+  }
+}
+
+function addUnsubscribeListeners() {
+  document.querySelectorAll(".unsubscribe-btn").forEach((button) => {
+    button.addEventListener("click", handleUnsubscribe);
+  });
+}
+
+window.addEventListener("message", (event) => {
+  const config = event.data;
+  initializeTable(config);
+  addUnsubscribeListeners();
+  // addDeleteEmailListeners(config.token);
+});
