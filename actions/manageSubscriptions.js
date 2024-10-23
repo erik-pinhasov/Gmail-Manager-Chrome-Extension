@@ -1,8 +1,18 @@
+// manageSubscriptions.js
+import {
+  showCustomModal,
+  getHeaderValue,
+  createGmailApiUrl,
+  fetchWithRetries,
+  extractEmailAddress,
+} from "./util.js";
+import { fetchEmailDetails } from "./common.js";
+
 const subscriptionCache = {
   emails: new Map(),
 };
 
-function populateYearOptions() {
+export function populateYearOptions() {
   const yearSelect = document.getElementById("yearSelect");
   const currentYear = new Date().getFullYear();
 
@@ -14,27 +24,17 @@ function populateYearOptions() {
   }
 }
 
-function handleFetchSubscriptionsByYear(selectedYear, callback) {
+export async function handleFetchSubscriptionsByYear(token, selectedYear) {
   subscriptionCache.emails.clear();
-  fetchToken(true, (token) => {
-    fetchSubsByYear(token, selectedYear, () => {
-      callback(generateDataPayload(selectedYear));
-    });
-  });
+  await fetchSubsByYear(token, selectedYear);
+  return generateDataPayload(selectedYear);
 }
 
 function createSearchQuery(year) {
   return `after:${year}/01/01 before:${year}/12/31 ("unsubscribe" OR "notifications" OR "alerts" OR "preferences" OR "mailing" OR "דיוור" OR "תפוצה" OR "לנהל")`;
 }
 
-function createGmailApiUrl(query, pageToken) {
-  const baseUrl = `https://www.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(
-    query
-  )}`;
-  return pageToken ? `${baseUrl}&pageToken=${pageToken}` : baseUrl;
-}
-
-async function fetchSubsByYear(token, year, callback) {
+async function fetchSubsByYear(token, year) {
   const processPage = async (pageToken = null) => {
     try {
       const data = await fetchWithRetries(
@@ -55,27 +55,6 @@ async function fetchSubsByYear(token, year, callback) {
   };
 
   await processPage();
-  callback();
-}
-
-async function fetchWithRetries(url, token, retries = 5, delay = 1000) {
-  try {
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-
-    if (response.status === 429 && retries > 0) {
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      return fetchWithRetries(url, token, retries - 1, delay * 2);
-    }
-
-    if (!response.ok) throw new Error(response.statusText);
-    return await response.json();
-  } catch (error) {
-    console.error("Fetch failed:", error);
-    throw error;
-  }
 }
 
 async function processSubsEmails(token, messages) {
@@ -95,15 +74,13 @@ async function processEmailBatch(token, batch) {
   await Promise.all(
     batch.map(async (message) => {
       try {
-        const addressURL = `https://www.googleapis.com/gmail/v1/users/me/messages/${message.id}`;
-        const details = await fetchWithRetries(addressURL, token);
+        const details = await fetchEmailDetails(token, message.id);
         const headers = details?.payload?.headers;
         if (!headers) return;
 
-        const emailAddress = getHeaderValue(headers, "From")
-          ?.match(/<(.+)>/)?.[1]
-          ?.toLowerCase();
-        const name = getHeaderValue(headers, "From")?.split("<")[0]?.trim();
+        const fromHeader = getHeaderValue(headers, "From");
+        const emailAddress = extractEmailAddress(fromHeader)?.toLowerCase();
+        const name = fromHeader?.split("<")[0]?.trim();
 
         if (!emailAddress || subscriptionCache.emails.has(emailAddress)) return;
 
@@ -135,7 +112,7 @@ async function fetchEmailCountBySender(token, emailAddress) {
 
   try {
     const data = await fetchWithRetries(url, token);
-    return data.resultSizeEstimate || 0; // Return email count
+    return data.resultSizeEstimate || 0;
   } catch (error) {
     console.error(`Error fetching email count for ${emailAddress}:`, error);
     return 0;
@@ -183,10 +160,7 @@ function generateDataPayload(year) {
             Unsubscribe
           </button>
           <button class="delete-emails-btn" 
-            data-email="${encodeURIComponent(email)}" 
-            data-messageIds="${encodeURIComponent(
-              JSON.stringify(data.messageIds)
-            )}">
+            data-email="${encodeURIComponent(email)}">
             Delete All Emails
           </button>`,
       }))

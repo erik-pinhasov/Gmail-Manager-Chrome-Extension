@@ -1,108 +1,141 @@
-// Login with Google OAuth2
-function login() {
-  chrome.identity.getAuthToken({ interactive: true }, (token) => {
-    if (chrome.runtime.lastError) {
-      showCustomModal("Login failed. Please try again.");
-    } else {
-      chrome.storage.local.set({ loggedIn: true, token: token }, () => {
-        initUserDetails();
-        showWindow("mainWindow");
-      });
-    }
+import { showCustomModal, loadingSpinner, showWindow } from "./actions/util.js";
+import { fetchLabels, batchDeleteLabel } from "./actions/deleteByLabel.js";
+import {
+  fetchEmailsBySearch,
+  batchDeleteSender,
+  displaySendersEmailCounts,
+  fetchEmailsForSender,
+} from "./actions/deleteBySender.js";
+import {
+  handleFetchSubscriptionsByYear,
+  populateYearOptions,
+} from "./actions/manageSubscriptions.js";
+
+// Wrap all Chrome API calls in functions
+function getAuthToken(interactive) {
+  return new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive }, (token) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(token);
+      }
+    });
   });
 }
 
-// Logout with Google OAuth2
-function logout() {
-  chrome.identity.getAuthToken({ interactive: false }, (token) => {
+function setStorageData(data) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set(data, resolve);
+  });
+}
+
+function getStorageData(keys) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(keys, resolve);
+  });
+}
+
+function getUserInfo() {
+  return new Promise((resolve) => {
+    chrome.identity.getProfileUserInfo({ accountStatus: "ANY" }, resolve);
+  });
+}
+
+// Login function
+async function login() {
+  try {
+    const token = await getAuthToken(true);
+    await setStorageData({ loggedIn: true, token: token });
+    await initUserDetails();
+    showWindow("mainWindow");
+  } catch (error) {
+    showCustomModal("Login failed. Please try again.");
+    console.error("Login error:", error);
+  }
+}
+
+// Logout function
+async function logout() {
+  try {
+    const token = await getAuthToken(false);
     if (!token) {
       console.error("No token found to remove.");
       showWindow("loginWindow");
       return;
     }
 
-    fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`)
-      .then(() => chrome.identity.removeCachedAuthToken({ token }))
-      .then(() => chrome.identity.clearAllCachedAuthTokens())
-      .then(() => chrome.storage.local.set({ loggedIn: false, token: null }))
-      .then(() => {
-        showCustomModal("Logged out successfully.");
-        showWindow("loginWindow");
-      })
-      .catch((error) => {
-        console.error("Error during logout process:", error);
-        showWindow("loginWindow");
-      });
-  });
+    await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`);
+    await new Promise((resolve) =>
+      chrome.identity.removeCachedAuthToken({ token }, resolve)
+    );
+    await new Promise((resolve) =>
+      chrome.identity.clearAllCachedAuthTokens(resolve)
+    );
+    await setStorageData({ loggedIn: false, token: null });
+
+    showCustomModal("Logged out successfully.");
+    showWindow("loginWindow");
+  } catch (error) {
+    console.error("Error during logout process:", error);
+    showWindow("loginWindow");
+  }
 }
 
 // Show user email address in main window
 function initUserDetails() {
   chrome.identity.getProfileUserInfo({ accountStatus: "ANY" }, (userInfo) => {
     const message = document.getElementById("welcomeMessage");
-    if (userInfo.email) {
-      message.textContent = `Welcome, ${userInfo.email}`;
-    } else {
-      message.textContent = "Welcome, User";
-    }
+    message.textContent = userInfo.email
+      ? `Welcome, ${userInfo.email}`
+      : "Welcome, User";
   });
 }
 
 // Token handling
-function fetchToken(interactive = true, callback) {
-  chrome.runtime.sendMessage(
-    { action: "getAuthToken", interactive: interactive },
-    (response) => {
-      if (response.token) {
-        callback(response.token);
-      } else {
-        showCustomModal("Authorization failed. Please try again.");
+function fetchToken(interactive = true) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { action: "getAuthToken", interactive: interactive },
+      (response) => {
+        if (response.token) {
+          resolve(response.token);
+        } else {
+          reject(new Error("Authorization failed. Please try again."));
+        }
       }
-    }
-  );
-}
-
-// Show/hide the loading spinner with the overlay
-function loadingSpinner(show) {
-  const overlay = document.getElementById("loadingOverlay");
-  overlay.classList.toggle("hidden", !show);
-}
-
-// Show UI window and hide others
-function showWindow(windowToShow) {
-  const windows = [
-    "loginWindow",
-    "mainWindow",
-    "byLabelWindow",
-    "bySenderWindow",
-    "subsWindow",
-  ];
-  windows.forEach((window) => {
-    const element = document.getElementById(window);
-    element.classList.toggle("hidden", window !== windowToShow);
+    );
   });
 }
 
 // Handle delete by label flow
 function deleteByLabelHandler() {
-  document.getElementById("byLabel").addEventListener("click", () => {
-    loadingSpinner(true);
-    fetchToken(true, (token) => {
-      fetchLabels(token, () => {
-        loadingSpinner(false);
-        showWindow("byLabelWindow");
-      });
-    });
+  document.getElementById("byLabel").addEventListener("click", async () => {
+    try {
+      loadingSpinner(true);
+      const token = await fetchToken(true);
+      await fetchLabels(token);
+      loadingSpinner(false);
+      showWindow("byLabelWindow");
+    } catch (error) {
+      loadingSpinner(false);
+      showCustomModal(error.message);
+    }
   });
 
-  document.getElementById("deleteByLabel").addEventListener("click", () => {
-    const labelSelect = document.getElementById("labelSelect");
-    const selectedLabelId = labelSelect.value;
-    const selectedLabel = labelSelect.options[labelSelect.selectedIndex].text;
-    fetchToken(false, (token) => {
-      batchDeleteLabel(token, selectedLabelId, selectedLabel);
+  document
+    .getElementById("deleteByLabel")
+    .addEventListener("click", async () => {
+      const labelSelect = document.getElementById("labelSelect");
+      const selectedLabelId = labelSelect.value;
+      const selectedLabel = labelSelect.options[labelSelect.selectedIndex].text;
+      try {
+        const token = await fetchToken(false);
+        await batchDeleteLabel(token, selectedLabelId, selectedLabel);
+      } catch (error) {
+        showCustomModal(error.message);
+      }
     });
-  });
 }
 
 // Handle delete by sender flow
@@ -111,29 +144,60 @@ function deleteBySenderHandler() {
     showWindow("bySenderWindow");
   });
 
-  document.getElementById("searchSender").addEventListener("click", () => {
-    const searchTerm = document.getElementById("searchInput").value.trim();
+  document
+    .getElementById("searchSender")
+    .addEventListener("click", async () => {
+      const searchTerm = document.getElementById("searchInput").value.trim();
 
-    if (!searchTerm) {
-      showCustomModal("Please enter a search term.");
+      if (!searchTerm) {
+        showCustomModal("Please enter a search term.");
+        return;
+      }
+
+      try {
+        loadingSpinner(true);
+        const token = await fetchToken(true);
+        const senders = await fetchEmailsBySearch(token, searchTerm);
+        loadingSpinner(false);
+        displaySendersEmailCounts(senders);
+      } catch (error) {
+        loadingSpinner(false);
+        showCustomModal(error.message);
+      }
+    });
+
+  document.getElementById("viewEmails").addEventListener("click", async () => {
+    const selectedSender = document.getElementById("senderSelect").value;
+    if (!selectedSender) {
+      showCustomModal("Please select a sender first.");
       return;
     }
 
-    loadingSpinner(true);
-    fetchToken(true, (token) => {
-      clearPreviousEmailList();
-      fetchEmailsBySearch(token, searchTerm, (senders) => {
-        loadingSpinner(false);
-        displaySendersEmailCounts(token, senders);
-      });
-    });
+    try {
+      loadingSpinner(true);
+      const token = await fetchToken(true);
+      await fetchEmailsForSender(token, selectedSender);
+      loadingSpinner(false);
+    } catch (error) {
+      loadingSpinner(false);
+      showCustomModal("Error fetching email details.");
+      console.error("Error viewing emails:", error);
+    }
   });
 
-  document.getElementById("deleteBySender").addEventListener("click", () => {
-    fetchToken(false, (token) => {
-      batchDeleteSender(token, document.getElementById("senderSelect").value);
+  document
+    .getElementById("deleteBySender")
+    .addEventListener("click", async () => {
+      try {
+        const token = await fetchToken(false);
+        await batchDeleteSender(
+          token,
+          document.getElementById("senderSelect").value
+        );
+      } catch (error) {
+        showCustomModal(error.message);
+      }
     });
-  });
 }
 
 // Handle subscription flow
@@ -143,16 +207,26 @@ function subscriptionHandler() {
     showWindow("subsWindow");
   });
 
-  document.getElementById("fetchByYear").addEventListener("click", () => {
+  document.getElementById("fetchByYear").addEventListener("click", async () => {
     const yearSelect = document.getElementById("yearSelect");
     const selectedYear = yearSelect.value;
-    loadingSpinner(true);
-    handleFetchSubscriptionsByYear(selectedYear, (dataPayload) => {
+    try {
+      loadingSpinner(true);
+      const token = await fetchToken(true);
+      const dataPayload = await handleFetchSubscriptionsByYear(
+        token,
+        selectedYear
+      );
       loadingSpinner(false);
-      if (dataPayload.dataItems.length === 0)
+      if (dataPayload.dataItems.length === 0) {
         showCustomModal("No subscriptions found for the selected year.");
-      else openDataWindow("listPage.html", dataPayload);
-    });
+      } else {
+        openDataWindow("listPage.html", dataPayload);
+      }
+    } catch (error) {
+      loadingSpinner(false);
+      showCustomModal(error.message);
+    }
   });
 }
 
@@ -167,22 +241,27 @@ function initializeButtonsHandler() {
 }
 
 // Initialize the popup
-function initializePopup() {
-  document.addEventListener("DOMContentLoaded", () => {
-    chrome.storage.local.get(["loggedIn", "token"], (data) => {
+async function initializePopup() {
+  document.addEventListener("DOMContentLoaded", async () => {
+    try {
+      const data = await chrome.storage.local.get(["loggedIn", "token"]);
       if (data.loggedIn && data.token) {
-        chrome.identity.getAuthToken({ interactive: false }, (token) => {
-          if (token) {
-            initUserDetails();
-            showWindow("mainWindow");
-          } else {
-            showWindow("loginWindow");
-          }
+        const token = await new Promise((resolve) => {
+          chrome.identity.getAuthToken({ interactive: false }, resolve);
         });
+        if (token) {
+          initUserDetails();
+          showWindow("mainWindow");
+        } else {
+          showWindow("loginWindow");
+        }
       } else {
         showWindow("loginWindow");
       }
-    });
+    } catch (error) {
+      console.error("Error initializing popup:", error);
+      showWindow("loginWindow");
+    }
   });
 
   initializeButtonsHandler();

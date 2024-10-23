@@ -1,174 +1,112 @@
-// Utility function to close the modal
-function closeModal(modal, modalContent, cancelButton) {
-  modal.style.display = "none";
-  modalContent.removeChild(cancelButton);
-}
+// common.js
+import { showCustomModal, fetchWithRetries } from "./util.js";
 
-// Function to show a custom modal (combined for Confirm and Alert)
-function showCustomModal(message, callback, isConfirm = false) {
-  const modal = document.getElementById("customModal");
-  const modalButton = document.getElementById("modalButton");
-
-  document.getElementById("modalMessage").textContent = message;
-  modal.style.display = "flex";
-  modalButton.onclick = null;
-
-  if (isConfirm) {
-    setupConfirmModal(modal, modalButton, callback);
-  } else {
-    setupAlertModal(modal, modalButton, callback);
-  }
-}
-
-// Function to set up Alert modal
-function setupAlertModal(modal, modalButton, callback) {
-  modalButton.textContent = "OK";
-  modalButton.onclick = () => {
-    modal.style.display = "none";
-    if (callback) callback();
-  };
-}
-
-// Function to set up Confirm modal
-function setupConfirmModal(modal, modalButton, callback) {
-  const cancelButton = document.createElement("button");
-  cancelButton.textContent = "Cancel";
-  modalButton.textContent = "Confirm";
-  const modalContent = document.querySelector(".modalContent");
-  modalContent.appendChild(cancelButton);
-
-  modalButton.onclick = () => {
-    closeModal(modal, modalContent, cancelButton);
-    callback();
-  };
-
-  cancelButton.onclick = () => {
-    closeModal(modal, modalContent, cancelButton);
-  };
-}
-
-// Helper function to confirm deletion
-function confirmDeletion(token, messageIds, itemName) {
-  showCustomModal(
-    `Delete all emails from "${itemName}"?`,
-    () => {
-      deleteEmails(token, messageIds, () => {
-        showCustomModal(`${itemName} deleted successfully!`, () => {
-          location.reload();
-        });
-      });
-    },
-    true
-  );
-}
-
-// Fetch total emails with optional query (e.g., by label or by sender)
-function fetchEmails(token, labelId = "", query = "", callback, retries = 3) {
+export async function fetchEmails(token, labelId = "", query = "") {
   let emailCount = 0;
   let emailIds = [];
+  const maxResults = 1000; // Increased page size
 
-  function fetchPage(pageToken = null) {
+  async function fetchPage(pageToken = null) {
     const params = new URLSearchParams({
-      maxResults: 500,
+      maxResults,
       q: query,
       ...(labelId && { labelIds: labelId }),
       ...(pageToken && { pageToken }),
     });
 
-    // Fetch emails from Gmail API
-    fetch(`https://www.googleapis.com/gmail/v1/users/me/messages?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((response) =>
-        response.ok ? response.json() : Promise.reject("Fetch failed")
-      )
-      .then((data) => {
-        if (data.messages) {
-          emailCount += data.messages.length;
-          emailIds.push(...data.messages.map((msg) => msg.id));
-        }
+    try {
+      const data = await fetchWithRetries(
+        `https://www.googleapis.com/gmail/v1/users/me/messages?${params}`,
+        token
+      );
 
-        data.nextPageToken
-          ? fetchPage(data.nextPageToken)
-          : callback(emailCount, emailIds);
-      })
-      .catch((error) => {
-        if (retries > 0) {
-          setTimeout(
-            () => fetchEmails(token, labelId, query, callback, retries - 1),
-            500
-          );
-        } else {
-          console.error("Failed to fetch emails:", error);
-          callback(0, []);
-        }
-      });
+      if (data.messages) {
+        emailCount += data.messages.length;
+        emailIds.push(...data.messages.map((msg) => msg.id));
+      }
+
+      if (data.nextPageToken) {
+        await fetchPage(data.nextPageToken);
+      }
+    } catch (error) {
+      console.error("Failed to fetch emails:", error);
+      throw error;
+    }
   }
 
-  fetchPage();
+  await fetchPage();
+  return { emailCount, emailIds };
 }
 
-// Fetch email details with retry mechanism
-function fetchEmailDetails(token, messageId, retries = 3) {
+export async function fetchEmailDetails(token, messageId) {
   const url = `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?fields=payload.headers`;
 
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    .then((response) => {
-      if (!response.ok) throw new Error("Failed to fetch email details");
-      return response.json();
-    })
-    .then((data) => data.payload || null)
-    .catch((error) => {
-      if (retries > 0) {
-        console.warn(
-          `Retrying fetch for message ID: ${messageId}... (${retries} attempts left)`
-        );
-        return new Promise((resolve) =>
-          setTimeout(
-            () => resolve(fetchEmailDetails(token, messageId, retries - 1)),
-            500
-          )
-        );
-      } else {
-        console.error("Error fetching email details:", error);
-        return null;
-      }
-    });
+  try {
+    const data = await fetchWithRetries(url, token);
+    return data.payload || null;
+  } catch (error) {
+    console.error("Error fetching email details:", error);
+    return null;
+  }
 }
 
-// Delete emails in batches
-function deleteEmails(token, messageIds, callback) {
+export async function deleteEmails(token, messageIds) {
   const batchSize = 1000;
-  const deleteInBatches = (ids) => {
+
+  async function deleteInBatches(ids) {
     const batch = ids.slice(0, batchSize);
     const remaining = ids.slice(batchSize);
 
-    fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/batchDelete`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ ids: batch }),
-    })
-      .then(() => {
-        if (remaining.length > 0) {
-          deleteInBatches(remaining);
-        } else {
-          callback();
+    try {
+      const response = await fetch(
+        `https://www.googleapis.com/gmail/v1/users/me/messages/batchDelete`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ids: batch }),
         }
-      })
-      .catch((error) => {
-        showCustomModal("Error occurred while deleting emails.");
-        console.error("Error deleting emails:", error);
-      });
-  };
+      );
 
-  deleteInBatches(messageIds);
+      if (!response.ok) {
+        throw new Error(`Delete failed with status: ${response.status}`);
+      }
+
+      if (remaining.length > 0) {
+        await deleteInBatches(remaining);
+      }
+    } catch (error) {
+      console.error("Error deleting emails:", error);
+      throw error;
+    }
+  }
+
+  try {
+    await deleteInBatches(messageIds);
+    return true;
+  } catch (error) {
+    showCustomModal("Error occurred while deleting emails.");
+    console.error("Error in deleteEmails:", error);
+    return false;
+  }
 }
 
-// Extract header value from email headers
-function getHeaderValue(headers, headerName) {
-  const header = headers.find((h) => h.name === headerName);
-  return header ? header.value : null;
+export function confirmDeletion(token, messageIds, itemName) {
+  showCustomModal(
+    `Delete all emails from "${itemName}"?`,
+    async () => {
+      try {
+        const success = await deleteEmails(token, messageIds);
+        if (success) {
+          showCustomModal(`${itemName} deleted successfully!`);
+        }
+      } catch (error) {
+        console.error("Error in confirmDeletion:", error);
+        showCustomModal(`Error deleting emails: ${error.message}`);
+      }
+    },
+    true
+  );
 }

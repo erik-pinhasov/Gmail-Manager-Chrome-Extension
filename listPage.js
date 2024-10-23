@@ -74,10 +74,10 @@ function initializeTable(config) {
   displayPage(mergedConfig, mergedConfig.currentPage);
 }
 
-function openDataWindow(url, dataPayload) {
+export function openDataWindow(url, dataPayload) {
   const listWindow = window.open(
     url,
-    "Data Table",
+    dataPayload.tableTitle,
     `width=${defaultConfig.windowWidth},height=${defaultConfig.windowHeight}`
   );
 
@@ -95,16 +95,14 @@ function openDataWindow(url, dataPayload) {
 function handleUnsubscribe(event) {
   const button = event.target;
   const email = decodeURIComponent(button.getAttribute("data-email"));
-
   const unsubscribeLink = decodeURIComponent(
     button.getAttribute("data-unsubscribe")
   );
 
   if (unsubscribeLink) {
     window.open(unsubscribeLink, "_blank");
-
     button.style.backgroundColor = "green";
-    button.disabled = false; // Ensure the button is not disabled
+    button.disabled = false;
   }
 }
 
@@ -118,5 +116,4 @@ window.addEventListener("message", (event) => {
   const config = event.data;
   initializeTable(config);
   addUnsubscribeListeners();
-  // addDeleteEmailListeners(config.token);
 });
