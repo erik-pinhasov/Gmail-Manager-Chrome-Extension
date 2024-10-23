@@ -1,12 +1,10 @@
 // manageSubscriptions.js
 import {
-  showCustomModal,
   getHeaderValue,
-  createGmailApiUrl,
-  fetchWithRetries,
+  createGmailUrl,
   extractEmailAddress,
-} from "./util.js";
-import { fetchEmailDetails } from "./common.js";
+} from "../utils/utils.js";
+import { fetchWithRetries, fetchEmailDetails } from "../utils/api.js";
 
 const subscriptionCache = {
   emails: new Map(),
@@ -38,7 +36,7 @@ async function fetchSubsByYear(token, year) {
   const processPage = async (pageToken = null) => {
     try {
       const data = await fetchWithRetries(
-        createGmailApiUrl(createSearchQuery(year), pageToken),
+        createGmailUrl(createSearchQuery(year), pageToken),
         token
       );
 
@@ -108,7 +106,7 @@ async function processEmailBatch(token, batch) {
 
 async function fetchEmailCountBySender(token, emailAddress) {
   const query = `from:${emailAddress}`;
-  const url = createGmailApiUrl(query);
+  const url = createGmailUrl(query);
 
   try {
     const data = await fetchWithRetries(url, token);

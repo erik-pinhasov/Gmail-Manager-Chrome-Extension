@@ -1,5 +1,30 @@
-// common.js
-import { showCustomModal, fetchWithRetries } from "./util.js";
+export async function fetchWithRetries(url, token, retries = 5, delay = 500) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (response.status === 429 && retries > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return fetchWithRetries(url, token, retries - 1, delay * 1.5);
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    if (retries > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return fetchWithRetries(url, token, retries - 1, delay * 1.5);
+    }
+    throw error;
+  }
+}
 
 export async function fetchEmails(token, labelId = "", query = "") {
   let emailCount = 0;
@@ -93,20 +118,47 @@ export async function deleteEmails(token, messageIds) {
   }
 }
 
-export function confirmDeletion(token, messageIds, itemName) {
-  showCustomModal(
-    `Delete all emails from "${itemName}"?`,
-    async () => {
-      try {
-        const success = await deleteEmails(token, messageIds);
-        if (success) {
-          showCustomModal(`${itemName} deleted successfully!`);
-        }
-      } catch (error) {
-        console.error("Error in confirmDeletion:", error);
-        showCustomModal(`Error deleting emails: ${error.message}`);
+export function getAuthToken(interactive) {
+  return new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive }, (token) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(token);
       }
-    },
-    true
+    });
+  });
+}
+
+export function setStorageData(data) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set(data, resolve);
+  });
+}
+
+export function getStorageData(keys) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(keys, resolve);
+  });
+}
+
+export function getUserInfo() {
+  return new Promise((resolve) => {
+    chrome.identity.getProfileUserInfo({ accountStatus: "ANY" }, resolve);
+  });
+}
+
+export async function logout(token) {
+  if (!token) {
+    throw new Error("No token provided for logout");
+  }
+
+  await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`);
+  await new Promise((resolve) =>
+    chrome.identity.removeCachedAuthToken({ token }, resolve)
   );
+  await new Promise((resolve) =>
+    chrome.identity.clearAllCachedAuthTokens(resolve)
+  );
+  await setStorageData({ loggedIn: false, token: null });
 }

@@ -1,7 +1,7 @@
 // deleteByLabel.js
 
-import { showCustomModal, fetchWithRetries } from "./util.js";
-import { fetchEmails, confirmDeletion } from "./common.js";
+import { showCustomModal, confirmDeletion } from "../utils/utils.js";
+import { fetchWithRetries, fetchEmails } from "../utils/api.js";
 
 const labelCache = {
   labels: [],

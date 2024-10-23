@@ -4,9 +4,9 @@
   "version": "1.0",
   "description": "A Chrome extension to fetch emails from Gmail.",
   "icons": {
-    "16": "icon.png",
-    "48": "icon.png",
-    "128": "icon.png"
+    "16": "./src/assets/icon.png",
+    "48": "./src/assets/icon.png",
+    "128": "./src/assets/icon.png"
   },
   "permissions": ["identity", "identity.email", "storage"],
   "oauth2": {
@@ -14,13 +14,13 @@
     "scopes": ["https://mail.google.com/"]
   },
   "background": {
-    "service_worker": "background.js",
+    "service_worker": "./src/utils/background.js",
     "type": "module"
   },
   "action": {
     "default_title": "Open Gmail Manager",
-    "default_popup": "popup.html",
-    "default_icon": "icon.png"
+    "default_popup": "./src/popup/popup.html",
+    "default_icon": "./src/assets/icon.png"
   },
   "host_permissions": [
     "https://www.googleapis.com/",
@@ -31,7 +31,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["listPage.html", "actions/*"],
+      "resources": ["./src/popup/list-page/listPage.html", "./src/actions/*"],
       "matches": ["<all_urls>"]
     }
   ]

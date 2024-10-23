@@ -5,9 +5,10 @@ import {
   getHeaderValue,
   formatDate,
   formatTime,
-} from "./util.js";
-import { fetchEmails, fetchEmailDetails, confirmDeletion } from "./common.js";
-import { openDataWindow } from "../listPage.js";
+  confirmDeletion,
+  openDataWindow,
+} from "../utils/utils.js";
+import { fetchEmails, fetchEmailDetails } from "../utils/api.js";
 
 const senderCache = {
   senders: new Map(),
@@ -118,7 +119,7 @@ export async function fetchEmailsForSender(token, sender) {
 
   const dataPayload = await fetchAndDisplayEmailSubjects(token, messageIds);
   if (dataPayload) {
-    openDataWindow("listPage.html", dataPayload);
+    openDataWindow("../popup/list-page/listPage.html", dataPayload);
   }
 }
 
@@ -143,7 +144,6 @@ async function fetchAndDisplayEmailSubjects(token, messageIds) {
       { label: "Time", key: "time" },
     ],
     dataItems: validSubjects,
-    rowsPerPage: 100,
   };
 }
 
