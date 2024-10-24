@@ -3,6 +3,7 @@ import {
   getHeaderValue,
   createGmailUrl,
   extractEmailAddress,
+  logError,
 } from "../utils/utils.js";
 import { fetchWithRetries, fetchEmailDetails } from "../utils/api.js";
 
@@ -48,7 +49,7 @@ async function fetchSubsByYear(token, year) {
         }
       }
     } catch (error) {
-      console.error("Error fetching subscriptions:", error);
+      logError(error);
     }
   };
 
@@ -98,7 +99,7 @@ async function processEmailBatch(token, batch) {
           });
         }
       } catch (error) {
-        console.error(`Error processing message ${message.id}:`, error);
+        logError(error, message.id);
       }
     })
   );
@@ -112,7 +113,7 @@ async function fetchEmailCountBySender(token, emailAddress) {
     const data = await fetchWithRetries(url, token);
     return data.resultSizeEstimate || 0;
   } catch (error) {
-    console.error(`Error fetching email count for ${emailAddress}:`, error);
+    logError(error, emailAddress);
     return 0;
   }
 }

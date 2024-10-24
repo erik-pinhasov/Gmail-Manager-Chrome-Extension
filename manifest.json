@@ -27,11 +27,11 @@
     "https://mail.google.com/"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';"
   },
   "web_accessible_resources": [
     {
-      "resources": ["./src/popup/list-page/listPage.html", "./src/actions/*"],
+      "resources": ["./src/popup/list-page/listPage.html", "./src/features/*"],
       "matches": ["<all_urls>"]
     }
   ]

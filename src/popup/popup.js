@@ -1,35 +1,37 @@
-import { showCustomModal, loadingSpinner, showWindow } from "../utils/utils.js";
-import { fetchLabels, batchDeleteLabel } from "../actions/deleteByLabel.js";
+import {
+  showCustomModal,
+  loadingSpinner,
+  showWindow,
+  logError,
+} from "../utils/utils.js";
+import { fetchLabels, batchDeleteLabel } from "../features/deleteByLabel.js";
 import {
   fetchEmailsBySearch,
   batchDeleteSender,
-  displaySendersEmailCounts,
-  fetchEmailsForSender,
-} from "../actions/deleteBySender.js";
+  displayEmailsCounts,
+  fetchSenderEmails,
+} from "../features/deleteBySender.js";
 import {
   handleFetchSubscriptionsByYear,
   populateYearOptions,
-} from "../actions/manageSubscriptions.js";
-import {
-  getAuthToken,
-  setStorageData,
-  getUserInfo,
-  logout,
-} from "../utils/api.js";
+} from "../features/manageSubscriptions.js";
+import { getAuthToken, getUserInfo, logout } from "../utils/api.js";
+import { sanitizeInput, sanitizeEmailAddress } from "../utils/sanitization.js";
+import { SecureStorage } from "../utils/storage.js";
 
 class PopupManager {
   constructor() {
-    this.initializeEventListeners();
+    this.initEventListeners();
   }
 
-  async initializeEventListeners() {
-    document.addEventListener("DOMContentLoaded", () => this.initializePopup());
-    this.initializeAuthButtons();
-    this.initializeFeatureHandlers();
-    this.initializeBackButtons();
+  async initEventListeners() {
+    document.addEventListener("DOMContentLoaded", () => this.initPopup());
+    this.initAuthButtons();
+    this.initFeatureHandlers();
+    this.initBackButtons();
   }
 
-  initializeAuthButtons() {
+  initAuthButtons() {
     document
       .getElementById("loginButton")
       ?.addEventListener("click", () => this.handleLogin());
@@ -38,44 +40,51 @@ class PopupManager {
       ?.addEventListener("click", () => this.handleLogout());
   }
 
-  initializeFeatureHandlers() {
-    this.initializeDeleteByLabel();
-    this.initializeDeleteBySender();
-    this.initializeSubscriptions();
+  initFeatureHandlers() {
+    this.initDeleteByLabel();
+    this.initDeleteBySender();
+    this.initSubscriptions();
   }
 
-  initializeBackButtons() {
+  initBackButtons() {
     document.querySelectorAll("#backToMenu").forEach((button) => {
       button.addEventListener("click", () => location.reload());
     });
   }
 
-  // Auth handlers
   async handleLogin() {
     try {
       const token = await getAuthToken(true);
-      await setStorageData({ loggedIn: true, token });
+      this.authToken = token;
+
+      await SecureStorage.set("authData", {
+        loggedIn: true,
+        token,
+        timestamp: Date.now(),
+      });
+
       await this.initUserDetails();
       showWindow("mainWindow");
     } catch (error) {
-      console.error("Login error:", error);
+      logError(error);
       showCustomModal("Login failed. Please try again.");
     }
   }
 
   async handleLogout() {
     try {
-      const token = await getAuthToken(false);
+      const token = this.authToken;
       if (!token) {
         showWindow("loginWindow");
         return;
       }
 
       await logout(token);
+      await SecureStorage.clear();
       showCustomModal("Logged out successfully.");
       showWindow("loginWindow");
     } catch (error) {
-      console.error("Logout error:", error);
+      logError(error);
       showWindow("loginWindow");
     }
   }
@@ -84,14 +93,14 @@ class PopupManager {
     const userInfo = await getUserInfo();
     const message = document.getElementById("welcomeMessage");
     if (message) {
-      message.textContent = userInfo.email
-        ? `Welcome, ${userInfo.email}`
+      const sanitizedEmail = sanitizeEmailAddress(userInfo.email);
+      message.textContent = sanitizedEmail
+        ? `Welcome, ${sanitizedEmail}`
         : "Welcome, User";
     }
   }
 
-  // Feature handlers
-  initializeDeleteByLabel() {
+  initDeleteByLabel() {
     document.getElementById("byLabel")?.addEventListener("click", async () => {
       try {
         loadingSpinner(true);
@@ -124,25 +133,25 @@ class PopupManager {
       });
   }
 
-  initializeDeleteBySender() {
+  initDeleteBySender() {
     document.getElementById("bySender")?.addEventListener("click", () => {
       showWindow("bySenderWindow");
     });
 
-    this.initializeSearchHandler();
-    this.initializeViewEmailsHandler();
-    this.initializeDeleteSenderHandler();
+    this.initSearchHandler();
+    this.initViewEmailsHandler();
+    this.initDeleteSenderHandler();
   }
 
-  initializeSearchHandler() {
+  initSearchHandler() {
     document
       .getElementById("searchSender")
       ?.addEventListener("click", async () => {
         const searchInput = document.getElementById("searchInput");
-        const searchTerm = searchInput?.value.trim();
+        const searchTerm = sanitizeInput(searchInput?.value?.trim());
 
         if (!searchTerm) {
-          showCustomModal("Please enter a search term.");
+          showCustomModal("Please enter a valid search term.");
           return;
         }
 
@@ -151,7 +160,7 @@ class PopupManager {
           const token = await getAuthToken(true);
           const senders = await fetchEmailsBySearch(token, searchTerm);
           loadingSpinner(false);
-          displaySendersEmailCounts(senders);
+          displayEmailsCounts(senders);
         } catch (error) {
           loadingSpinner(false);
           showCustomModal(error.message);
@@ -159,7 +168,7 @@ class PopupManager {
       });
   }
 
-  initializeViewEmailsHandler() {
+  initViewEmailsHandler() {
     document
       .getElementById("viewEmails")
       ?.addEventListener("click", async () => {
@@ -174,17 +183,17 @@ class PopupManager {
         try {
           loadingSpinner(true);
           const token = await getAuthToken(true);
-          await fetchEmailsForSender(token, selectedSender);
+          await fetchSenderEmails(token, selectedSender);
           loadingSpinner(false);
         } catch (error) {
           loadingSpinner(false);
           showCustomModal("Error fetching email details.");
-          console.error("Error viewing emails:", error);
+          logError(error);
         }
       });
   }
 
-  initializeDeleteSenderHandler() {
+  initDeleteSenderHandler() {
     document
       .getElementById("deleteBySender")
       ?.addEventListener("click", async () => {
@@ -200,7 +209,7 @@ class PopupManager {
       });
   }
 
-  initializeSubscriptions() {
+  initSubscriptions() {
     document.getElementById("subscriptions")?.addEventListener("click", () => {
       populateYearOptions();
       showWindow("subsWindow");
@@ -234,26 +243,30 @@ class PopupManager {
       });
   }
 
-  async initializePopup() {
+  async initPopup() {
     try {
-      const data = await chrome.storage.local.get(["loggedIn", "token"]);
-      if (data.loggedIn && data.token) {
+      const storageData = await SecureStorage.get("authData");
+
+      if (!storageData?.loggedIn) {
+        showWindow("loginWindow");
+        return;
+      }
+
+      try {
         const token = await getAuthToken(false);
-        if (token) {
-          await this.initUserDetails();
-          showWindow("mainWindow");
-        } else {
-          showWindow("loginWindow");
-        }
-      } else {
+        this.authToken = token;
+        await this.initUserDetails();
+        showWindow("mainWindow");
+      } catch (error) {
+        logError(error);
+        await SecureStorage.clear();
         showWindow("loginWindow");
       }
     } catch (error) {
-      console.error("Error initializing popup:", error);
+      logError(error);
       showWindow("loginWindow");
     }
   }
 }
 
-// Initialize the popup
 new PopupManager();

@@ -1,4 +1,3 @@
-// deleteBySender.js
 import {
   showCustomModal,
   extractEmailAddress,
@@ -7,52 +6,45 @@ import {
   formatTime,
   confirmDeletion,
   openDataWindow,
+  logError,
 } from "../utils/utils.js";
+import { Cache } from "../utils/cache.js";
 import { fetchEmails, fetchEmailDetails } from "../utils/api.js";
+import {
+  sanitizeEmailAddress,
+  sanitizeSearchQuery,
+} from "../utils/sanitization.js";
 
-const senderCache = {
-  senders: new Map(),
-  messageIds: new Map(),
-  emailDetails: new Map(),
-};
+const senderCache = new Cache({
+  ttl: 15 * 60 * 1000,
+  maxSize: 1000,
+  cacheKey: "senderCache",
+});
 
-function clearSenderCache() {
-  senderCache.senders.clear();
-  senderCache.messageIds.clear();
-  senderCache.emailDetails.clear();
+export function clearSenderCache() {
+  senderCache.clear();
+  toggleSenderElements(false);
 }
 
-// Function to update UI after deletion
-function updateSenderAfterDeletion(sender) {
+export function updateSenderAfterDeletion(sender) {
   const senderSelect = document.getElementById("senderSelect");
   if (!senderSelect) return;
 
-  // Remove the sender option from select element
   const option = senderSelect.querySelector(`option[value="${sender}"]`);
   if (option) {
     senderSelect.removeChild(option);
   }
 
-  // Update cache
   const cacheKey = `from:${sender}`;
-  senderCache.messageIds.delete(cacheKey);
+  senderCache.updateAfterDeletion(cacheKey);
 
-  // If this was the last sender, hide the buttons
   if (senderSelect.options.length === 0) {
-    const elements = ["viewEmails", "deleteBySender"];
-    elements.forEach((elementId) => {
-      const element = document.getElementById(elementId);
-      if (element) {
-        element.style.display = "none";
-      }
-    });
-    senderSelect.style.display = "none";
+    toggleSenderElements(false);
   }
 }
 
 export function toggleSenderElements(showElements) {
   const elements = ["senderSelect", "viewEmails", "deleteBySender"];
-
   elements.forEach((elementId) => {
     const element = document.getElementById(elementId);
     if (element) {
@@ -64,14 +56,22 @@ export function toggleSenderElements(showElements) {
 export async function batchDeleteSender(token, sender) {
   const cacheKey = `from:${sender}`;
   const messageIds = senderCache.messageIds.get(cacheKey);
-  confirmDeletion(token, messageIds, sender);
-  updateSenderAfterDeletion(sender);
+  if (messageIds && messageIds.length > 0) {
+    confirmDeletion(token, messageIds, sender);
+    updateSenderAfterDeletion(sender);
+  } else {
+    showCustomModal(`No emails found for "${sender}".`);
+  }
 }
 
 export async function fetchEmailsBySearch(token, searchTerm) {
+  const sanitizedTerm = sanitizeSearchQuery(searchTerm);
+  if (!sanitizedTerm) {
+    showCustomModal("Please enter a valid search term.");
+    return [];
+  }
   clearSenderCache();
-
-  const { emailCount, emailIds } = await fetchEmails(token, "", searchTerm);
+  const { emailCount, emailIds } = await fetchEmails(token, "", sanitizedTerm);
 
   if (emailCount === 0) {
     showCustomModal("No results found.");
@@ -79,22 +79,28 @@ export async function fetchEmailsBySearch(token, searchTerm) {
   }
 
   try {
-    const sendersArray = await extractSendersFromEmails(token, emailIds);
-    senderCache.senders.set(searchTerm, sendersArray);
-    return fetchAndSortSenders(token, sendersArray);
+    const sendersArray = await extractSenders(token, emailIds);
+    const sortedSenders = await fetchAndSortSenders(token, sendersArray);
+
+    senderCache.setItem("senders", sortedSenders);
+    return sortedSenders;
   } catch (error) {
-    console.error("Error processing email details:", error);
+    logError(error);
     showCustomModal("An error occurred while fetching email details.");
     return [];
   }
 }
 
-async function extractSendersFromEmails(token, messageIds) {
+async function extractSenders(token, messageIds) {
   const sendersSet = new Set();
   const senderPromises = messageIds.map(async (messageId) => {
-    const emailData = await fetchEmailDetails(token, messageId);
-    const sender = extractSender(emailData);
-    if (sender) sendersSet.add(sender);
+    try {
+      const emailData = await fetchEmailDetails(token, messageId);
+      const sender = extractSender(emailData);
+      if (sender) sendersSet.add(sender);
+    } catch (error) {
+      logError(error, messageId);
+    }
   });
 
   await Promise.all(senderPromises);
@@ -104,12 +110,14 @@ async function extractSendersFromEmails(token, messageIds) {
 function extractSender(emailData) {
   if (emailData && emailData.headers) {
     const senderHeaderValue = getHeaderValue(emailData.headers, "From");
-    return senderHeaderValue ? extractEmailAddress(senderHeaderValue) : null;
+    return senderHeaderValue
+      ? sanitizeEmailAddress(extractEmailAddress(senderHeaderValue))
+      : null;
   }
   return null;
 }
 
-export async function fetchEmailsForSender(token, sender) {
+export async function fetchSenderEmails(token, sender) {
   const cacheKey = `from:${sender}`;
   const messageIds = senderCache.messageIds.get(cacheKey);
   if (!messageIds || messageIds.length === 0) {
@@ -117,13 +125,13 @@ export async function fetchEmailsForSender(token, sender) {
     return;
   }
 
-  const dataPayload = await fetchAndDisplayEmailSubjects(token, messageIds);
+  const dataPayload = await displayEmailSubjects(token, messageIds);
   if (dataPayload) {
     openDataWindow("../popup/list-page/listPage.html", dataPayload);
   }
 }
 
-async function fetchAndDisplayEmailSubjects(token, messageIds) {
+async function displayEmailSubjects(token, messageIds) {
   const subjectPromises = messageIds.map((messageId) =>
     getEmailDetails(token, messageId)
   );
@@ -150,41 +158,52 @@ async function fetchAndDisplayEmailSubjects(token, messageIds) {
 async function fetchAndSortSenders(token, sendersArray) {
   const senderCounts = await Promise.all(
     sendersArray.map(async (sender) => {
-      const query = `in:anywhere from:${sender}`;
-      const { emailCount, emailIds } = await fetchEmails(token, "", query);
-      senderCache.messageIds.set(`from:${sender}`, emailIds);
-      return { sender, count: emailCount };
+      try {
+        const query = `in:anywhere from:${sender}`;
+        const { emailCount, emailIds } = await fetchEmails(token, "", query);
+        const cacheKey = `from:${sender}`;
+        senderCache.setMessageIds(cacheKey, emailIds);
+        senderCache.setCount(cacheKey, emailCount); // Add this
+        return { sender, count: emailCount };
+      } catch (error) {
+        logError(error, sender);
+        return { sender, count: 0 };
+      }
     })
   );
 
-  return senderCounts.sort((a, b) => b.count - a.count);
+  return senderCounts
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count);
 }
 
 async function getEmailDetails(token, messageId) {
-  if (senderCache.emailDetails.has(messageId)) {
+  if (senderCache.emailDetails?.has(messageId)) {
     return senderCache.emailDetails.get(messageId);
   }
 
   const emailData = await fetchEmailDetails(token, messageId);
   if (emailData && emailData.headers) {
-    const formattedData = formatEmailData(emailData);
+    const formattedData = {
+      subject: getHeaderValue(emailData.headers, "Subject") || "(No Subject)",
+      date: formatDate(
+        new Date(getHeaderValue(emailData.headers, "Date") || Date.now())
+      ),
+      time: formatTime(
+        new Date(getHeaderValue(emailData.headers, "Date") || Date.now())
+      ),
+    };
+
+    if (!senderCache.emailDetails) {
+      senderCache.emailDetails = new Map();
+    }
     senderCache.emailDetails.set(messageId, formattedData);
     return formattedData;
   }
   return null;
 }
 
-function formatEmailData(data) {
-  const subject = getHeaderValue(data.headers, "Subject") || "(No Subject)";
-  const date = new Date(getHeaderValue(data.headers, "Date") || Date.now());
-  return {
-    subject,
-    date: formatDate(date),
-    time: formatTime(date),
-  };
-}
-
-export function displaySendersEmailCounts(senders) {
+export function displayEmailsCounts(senders) {
   toggleSenderElements(false);
 
   if (!senders || senders.length === 0) {

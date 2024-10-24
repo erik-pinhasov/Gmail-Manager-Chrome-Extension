@@ -1,23 +1,14 @@
-import { deleteEmails } from "./api.js";
-
 export function showCustomModal(message, callback = null, isConfirm = false) {
   const modal = document.getElementById("customModal");
   const modalContent = document.querySelector(".modalContent");
   const modalMessage = document.getElementById("modalMessage");
 
-  if (!modal || !modalContent || !modalMessage) {
-    console.error("Modal elements not found");
-    return;
-  }
+  if (!modal || !modalContent || !modalMessage) return;
 
-  // Clear existing content
   modalContent.innerHTML = "";
-
-  // Add message
   modalMessage.textContent = message;
   modalContent.appendChild(modalMessage);
 
-  // Create and add OK button
   const okButton = document.createElement("button");
   okButton.textContent = isConfirm ? "Confirm" : "OK";
   okButton.onclick = () => {
@@ -26,7 +17,6 @@ export function showCustomModal(message, callback = null, isConfirm = false) {
   };
   modalContent.appendChild(okButton);
 
-  // If it's a confirm dialog, add Cancel button
   if (isConfirm) {
     const cancelButton = document.createElement("button");
     cancelButton.textContent = "Cancel";
@@ -98,7 +88,7 @@ export function confirmDeletion(token, messageIds, itemName) {
           showCustomModal(`${itemName} deleted successfully!`);
         }
       } catch (error) {
-        console.error("Error in confirmDeletion:", error);
+        logError(error);
         showCustomModal(`Error deleting emails: ${error.message}`);
       }
     },
@@ -107,7 +97,7 @@ export function confirmDeletion(token, messageIds, itemName) {
 }
 
 export function openDataWindow(url, dataPayload) {
-  const listWindow = window.open(url, "Emails List", `width=800,height=600`);
+  const listWindow = window.open(url, "Emails List", `width=1000,height=800`);
 
   const sendData = () => {
     if (listWindow && !listWindow.closed) {
@@ -118,4 +108,20 @@ export function openDataWindow(url, dataPayload) {
 
   listWindow.addEventListener("load", sendData);
   const checkInterval = setInterval(sendData, 100);
+}
+
+export function logError(error, ...params) {
+  try {
+    const stack = new Error().stack;
+    const callerLine = stack.split("\n")[2];
+    const functionName =
+      callerLine.match(/at (\w+)/)?.[1] || "Unknown Function";
+
+    const paramString =
+      params.length > 0 ? `, Parameters: ${JSON.stringify(params)}` : "";
+
+    console.error(`Error in ${functionName}${paramString}:`, error);
+  } catch (errorInLogger) {
+    console.error("Error:", error);
+  }
 }
