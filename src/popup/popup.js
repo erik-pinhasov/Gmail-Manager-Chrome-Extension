@@ -75,16 +75,25 @@ class PopupManager {
     try {
       const token = this.authToken;
       if (!token) {
+        await SecureStorage.clear();
         showWindow("loginWindow");
         return;
       }
 
-      await logout(token);
+      try {
+        await logout(token);
+      } catch (error) {
+        logError(error);
+      }
+
       await SecureStorage.clear();
+      this.authToken = null;
       showCustomModal("Logged out successfully.");
       showWindow("loginWindow");
     } catch (error) {
       logError(error);
+      await SecureStorage.clear();
+      this.authToken = null;
       showWindow("loginWindow");
     }
   }

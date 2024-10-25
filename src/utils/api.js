@@ -25,7 +25,14 @@ async function makeRequest(url, options = {}) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  return response.json();
+  if (response.status !== 204) {
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      return response.json();
+    }
+  }
+
+  return null;
 }
 
 async function delay(ms) {
@@ -154,14 +161,28 @@ export async function deleteEmails(token, messageIds) {
   const batchSize = 1000;
 
   const deleteBatch = async (ids) => {
-    await makeRequest(
-      "https://www.googleapis.com/gmail/v1/users/me/messages/batchDelete",
-      {
-        method: "POST",
-        token,
-        body: JSON.stringify({ ids }),
+    try {
+      const response = await fetch(
+        "https://www.googleapis.com/gmail/v1/users/me/messages/batchDelete",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ids }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Delete failed with status: ${response.status}`);
       }
-    );
+
+      return true;
+    } catch (error) {
+      logError(error);
+      throw error;
+    }
   };
 
   try {
@@ -178,10 +199,12 @@ export async function deleteEmails(token, messageIds) {
 }
 
 export async function logout(token) {
-  if (!token) throw new Error("No token provided for logout");
+  if (!token) {
+    throw new Error("No token provided for logout");
+  }
 
   try {
-    await makeRequest(`https://accounts.google.com/o/oauth2/revoke`, { token });
+    await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`);
 
     await Promise.all([
       new Promise((resolve) =>
@@ -194,6 +217,15 @@ export async function logout(token) {
     ]);
   } catch (error) {
     logError(error);
+    await Promise.all([
+      new Promise((resolve) =>
+        chrome.identity.removeCachedAuthToken({ token }, resolve)
+      ),
+      new Promise((resolve) =>
+        chrome.identity.clearAllCachedAuthTokens(resolve)
+      ),
+      setStorageData({ loggedIn: false, token: null }),
+    ]);
     throw error;
   }
 }

@@ -71,7 +71,11 @@ export async function fetchEmailsBySearch(token, searchTerm) {
     return [];
   }
   clearSenderCache();
-  const { emailCount, emailIds } = await fetchEmails(token, "", sanitizedTerm);
+  const { emailCount, emailIds } = await fetchEmails(
+    token,
+    "",
+    `in:anywhere ${sanitizedTerm}`
+  );
 
   if (emailCount === 0) {
     showCustomModal("No results found.");

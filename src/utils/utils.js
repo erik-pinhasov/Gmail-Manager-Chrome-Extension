@@ -1,3 +1,5 @@
+import { deleteEmails } from "./api.js";
+
 export function showCustomModal(message, callback = null, isConfirm = false) {
   const modal = document.getElementById("customModal");
   const modalContent = document.querySelector(".modalContent");
