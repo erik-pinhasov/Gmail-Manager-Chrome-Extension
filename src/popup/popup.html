@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gmail Email Manager</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="header">
+      <img src="../assets/title.png" alt="Gmail Manager" class="titleImage" />
+    </div>
+
+    <div id="loginWindow" class="hidden">
+      <button id="loginButton" class="googleBtn">
+        <img src="https://img.icons8.com/color/48/000000/google-logo.png" />
+        <span>Continue with Google</span>
+      </button>
+    </div>
+
+    <div id="mainWindow" class="hidden">
+      <h2 id="welcomeMessage"></h2>
+      <button id="byLabel">Delete By Category/Label</button>
+      <button id="bySender">Delete By Email Address</button>
+      <button id="subscriptions">Manage Subscriptions</button>
+      <div class="footer">
+        <button id="logoutButton">Logout</button>
+        <img src="../assets/icon.png" class="extensionIcon" />
+      </div>
+    </div>
+
+    <div id="byLabelWindow" class="hidden">
+      <h2>Select a Category/Label to Delete</h2>
+      <select id="labelSelect" class="scrollableDropdown">
+        <option>Select a Category/Label</option>
+      </select>
+      <button id="deleteByLabel">Delete Emails in Selected Label</button>
+      <button id="backToMenu">Back</button>
+    </div>
+
+    <div id="bySenderWindow" class="hidden">
+      <h2>
+        Search and Select Email Address to Delete<br />Results include all
+        emails of an address
+      </h2>
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="Enter search term or email address"
+      />
+      <button id="searchSender">Search</button>
+      <select id="senderSelect" class="scrollableDropdown hidden"></select>
+      <button id="viewEmails" class="hidden">View Emails</button>
+      <button id="deleteBySender" class="hidden">Delete Sender Emails</button>
+      <button id="backToMenu">Back</button>
+    </div>
+
+    <div id="subsWindow" class="hidden">
+      <h2>Select Year and Fetch Subscriptions</h2>
+      <select id="yearSelect" class="scrollableDropdown"></select>
+      <button id="fetchByYear">Fetch Subscriptions</button>
+      <button id="backToMenu">Back to Main Menu</button>
+    </div>
+
+    <div id="customModal" class="modal">
+      <div class="modalContent">
+        <p id="modalMessage"></p>
+      </div>
+    </div>
+
+    <div id="loadingOverlay" class="loadingOverlay hidden">
+      <div class="loadingContainer">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+      </div>
+    </div>
+
+    <script type="module" src="./popup.js"></script>
+  </body>
+</html>
