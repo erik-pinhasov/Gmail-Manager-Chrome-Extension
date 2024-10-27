@@ -1,4 +1,3 @@
-// emailManager.js
 import {
   showCustomModal,
   getHeaderValue,
@@ -41,7 +40,6 @@ export class EmailManager {
 
     const option = selectElement.querySelector(`option[value="${identifier}"]`);
     if (option) {
-      // Correctly construct the item object
       const metadata = this.cache.items.get(identifier);
       const item = {
         identifier,
@@ -57,7 +55,6 @@ export class EmailManager {
     const cacheKey = this.getCacheKey(identifier);
     this.cache.updateAfterDeletion(cacheKey);
 
-    // Only hide elements if all items have 0 count
     const allZeroCount = Array.from(selectElement.options).every((opt) =>
       opt.textContent.includes("(0 emails)")
     );
@@ -186,12 +183,11 @@ export class EmailManager {
     this.toggleElements(true);
   }
 
-  // To be implemented by child classes
   getTableTitle() {
-    throw new Error("getTableTitle must be implemented by child class");
+    throw new Error("getTableTitle must be implemented");
   }
 
   formatOptionText(item) {
-    throw new Error("formatOptionText must be implemented by child class");
+    throw new Error("formatOptionText must be implemented");
   }
 }

@@ -55,7 +55,6 @@ class PopupManager {
       const token = await getAuthToken(true);
       this.authToken = token;
 
-      // Detect languages during first login
       const existingLanguages = await SecureStorage.get("userLanguages");
       if (!existingLanguages) {
         loadingSpinner(true);
@@ -148,7 +147,6 @@ class PopupManager {
       showWindow("bySenderWindow");
     });
 
-    // Search handler
     document
       .getElementById("searchSender")
       ?.addEventListener("click", async () => {
@@ -175,7 +173,6 @@ class PopupManager {
         }
       });
 
-    // View emails handler
     document
       .getElementById("viewEmails")
       ?.addEventListener("click", async () => {
@@ -218,7 +215,6 @@ class PopupManager {
         }
       });
 
-    // Delete sender handler
     document
       .getElementById("deleteBySender")
       ?.addEventListener("click", async () => {
@@ -282,7 +278,6 @@ class PopupManager {
         }
       });
 
-    // View subscription emails handler
     document
       .getElementById("viewSubscriptionEmails")
       ?.addEventListener("click", async () => {
@@ -334,7 +329,6 @@ class PopupManager {
         }
       });
 
-    // Unsubscribe handler
     document
       .getElementById("unsubscribeButton")
       ?.addEventListener("click", () => {
@@ -348,7 +342,6 @@ class PopupManager {
           subSelect.value
         );
         if (subscription?.unsubscribeLink) {
-          // Use chrome.windows.create instead of window.open
           chrome.windows.create(
             {
               url: subscription.unsubscribeLink,
@@ -357,7 +350,6 @@ class PopupManager {
               height: 600,
             },
             () => {
-              // Mark as unsubscribed after opening the window
               this.subscriptionManager.markAsUnsubscribed(subSelect.value);
             }
           );
@@ -368,7 +360,6 @@ class PopupManager {
         }
       });
 
-    // Delete subscription handler
     document
       .getElementById("deleteSubscription")
       ?.addEventListener("click", async () => {

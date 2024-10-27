@@ -1,9 +1,9 @@
-// subscriptionManager.js
 import { EmailManager } from "./emailManager.js";
 import {
   extractEmailAddress,
   logError,
   showCustomModal,
+  getHeaderValue,
 } from "../utils/utils.js";
 import { LanguageDetector } from "../utils/languageDetector.js";
 import { fetchEmailDetails, fetchEmails } from "../utils/api.js";
@@ -30,7 +30,6 @@ export class SubscriptionManager extends EmailManager {
     this.unsubscribedEmails.clear();
 
     try {
-      // Get saved languages or default to English
       const userLanguages = (await SecureStorage.get("userLanguages")) || [
         "en",
       ];
@@ -77,19 +76,18 @@ export class SubscriptionManager extends EmailManager {
         batch.map(async (messageId) => {
           try {
             const emailData = await fetchEmailDetails(token, messageId);
-            // Changed from emailData?.payload?.headers to emailData?.headers
             const headers = emailData?.headers;
             if (!headers) {
               return;
             }
 
-            const unsubscribeHeader = headers.find(
-              (h) => h.name === "List-Unsubscribe"
-            )?.value;
-
+            const unsubscribeHeader = getHeaderValue(
+              headers,
+              "List-Unsubscribe"
+            );
             if (!unsubscribeHeader) return;
 
-            const fromHeader = headers.find((h) => h.name === "From")?.value;
+            const fromHeader = getHeaderValue(headers, "From");
 
             if (!fromHeader) return;
 

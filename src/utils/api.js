@@ -94,17 +94,17 @@ export function getAuthToken(interactive = false) {
   });
 }
 
-export async function fetchWithRetries(url, token, retries = 3, delayMs = 500) {
+export async function fetchWithRetries(url, token, retries = 3, delay = 500) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       return await makeRequest(url, { token });
     } catch (error) {
       if (error.status === 429) {
-        await delay(delayMs * Math.pow(2, attempt));
+        await delay(delay * Math.pow(2, attempt));
         continue;
       }
       if (attempt === retries - 1) throw error;
-      await delay(delayMs * Math.pow(2, attempt));
+      await delay(delay * Math.pow(2, attempt));
     }
   }
 }

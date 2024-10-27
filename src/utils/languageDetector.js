@@ -1,4 +1,3 @@
-// languageUtils.js
 import { getHeaderValue, logError } from "./utils.js";
 import { fetchEmailDetails, fetchWithRetries } from "./api.js";
 import { SecureStorage } from "../utils/storage.js";
@@ -25,6 +24,7 @@ export class LanguageDetector {
         "ניוזלטר",
         "תפוצה",
         "ניהול",
+        "לנהל",
       ],
       es: [
         "desuscribir",
@@ -140,7 +140,7 @@ export class LanguageDetector {
 
       if (!data?.messages?.length) return ["en"];
 
-      const detectedLanguages = new Set(["en"]); // Always include English
+      const detectedLanguages = new Set(["en"]);
       const messageIds = data.messages.map((msg) => msg.id);
 
       await Promise.all(

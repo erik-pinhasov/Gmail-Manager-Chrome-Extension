@@ -1,5 +1,3 @@
-// labelManager.js
-
 import { EmailManager } from "./emailManager.js";
 import { showCustomModal, logError } from "../utils/utils.js";
 import { fetchWithRetries, fetchEmails } from "../utils/api.js";
@@ -24,16 +22,14 @@ export class LabelManager extends EmailManager {
         return [];
       }
 
-      // Process all labels
       const labelsArray = data.labels.map((label) => ({
         identifier: label.id,
         metadata: {
           labelName: this.formatLabelName(label.name),
-          originalName: label.name, // Keep original name for reference
+          originalName: label.name,
         },
       }));
 
-      // Fetch email counts for all labels
       const labelCounts = await Promise.all(
         labelsArray.map(async (label) => {
           try {
@@ -47,7 +43,6 @@ export class LabelManager extends EmailManager {
             this.cache.setMessageIds(cacheKey, emailIds || []);
             this.cache.setCount(cacheKey, emailCount);
 
-            // Store the metadata with the formatted name
             this.cache.setItem(label.identifier, label.metadata);
 
             return {

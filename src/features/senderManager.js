@@ -1,4 +1,3 @@
-// senderManager.js
 import { EmailManager } from "./emailManager.js";
 import {
   showCustomModal,
@@ -42,7 +41,6 @@ export class SenderManager extends EmailManager {
         return [];
       }
 
-      // Process emails in batches to avoid rate limits
       const sendersMap = await this.extractSendersInBatches(token, emailIds);
       const sendersArray = Array.from(sendersMap.values());
 
@@ -62,7 +60,7 @@ export class SenderManager extends EmailManager {
 
   async extractSendersInBatches(token, messageIds, batchSize = 20) {
     const sendersMap = new Map();
-    const retryDelay = 1000; // 1 second delay for retries
+    const retryDelay = 1000;
 
     for (let i = 0; i < messageIds.length; i += batchSize) {
       const batch = messageIds.slice(i, i + batchSize);
@@ -72,24 +70,20 @@ export class SenderManager extends EmailManager {
       while (retryCount < maxRetries) {
         try {
           await this.processSenderBatch(token, batch, sendersMap);
-          // If successful, break the retry loop
           break;
         } catch (error) {
           retryCount++;
           if (error.status === 429 || error.message?.includes("429")) {
-            // Rate limit hit - wait longer before retry
             await new Promise((resolve) =>
               setTimeout(resolve, retryDelay * Math.pow(2, retryCount))
             );
             continue;
           }
-          // For other errors, log and continue to next batch
           logError(error, { batch, retryCount });
           break;
         }
       }
 
-      // Add a small delay between batches to avoid rate limits
       if (i + batchSize < messageIds.length) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
@@ -118,10 +112,6 @@ export class SenderManager extends EmailManager {
             }
           }
         } catch (error) {
-          // Only throw rate limit errors, log others
-          if (error.status === 429 || error.message?.includes("429")) {
-            throw error;
-          }
           logError(error, messageId);
         }
       })
