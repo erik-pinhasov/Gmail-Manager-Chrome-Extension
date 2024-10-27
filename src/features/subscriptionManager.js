@@ -1,13 +1,14 @@
 // subscriptionManager.js
 import { EmailManager } from "./emailManager.js";
 import {
-  getHeaderValue,
   extractEmailAddress,
   logError,
   showCustomModal,
 } from "../utils/utils.js";
+import { LanguageDetector } from "../utils/languageDetector.js";
 import { fetchEmailDetails, fetchEmails } from "../utils/api.js";
 import { sanitizeEmailAddress } from "../utils/sanitization.js";
+import { SecureStorage } from "../utils/storage.js";
 
 export class SubscriptionManager extends EmailManager {
   constructor() {
@@ -28,9 +29,18 @@ export class SubscriptionManager extends EmailManager {
     this.clearCache();
     this.unsubscribedEmails.clear();
 
-    const searchQuery = `after:${year}/01/01 before:${year}/12/31 ("unsubscribe" OR "notifications" OR "alerts" OR "preferences" OR "mailing" OR "דיוור" OR "תפוצה" OR "לנהל")`;
-
     try {
+      // Get saved languages or default to English
+      const userLanguages = (await SecureStorage.get("userLanguages")) || [
+        "en",
+      ];
+      const languageDetector = new LanguageDetector();
+
+      const searchQuery = languageDetector.buildSearchQuery(
+        year,
+        userLanguages
+      );
+
       const { emailCount, emailIds } = await fetchEmails(
         token,
         "",
@@ -70,7 +80,6 @@ export class SubscriptionManager extends EmailManager {
             // Changed from emailData?.payload?.headers to emailData?.headers
             const headers = emailData?.headers;
             if (!headers) {
-              console.log("No headers found for:", messageId);
               return;
             }
 
@@ -109,7 +118,6 @@ export class SubscriptionManager extends EmailManager {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
-    console.log("Total subscriptions found:", subscriptionsMap.size);
     return Array.from(subscriptionsMap.values());
   }
   extractUnsubscribeLink(header) {

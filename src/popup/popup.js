@@ -8,6 +8,7 @@ import {
 import { getAuthToken, getUserInfo, logout } from "../utils/api.js";
 import { sanitizeEmailAddress } from "../utils/sanitization.js";
 import { SecureStorage } from "../utils/storage.js";
+import { LanguageDetector } from "../utils/languageDetector.js";
 import { SenderManager } from "../features/senderManager.js";
 import { LabelManager } from "../features/labelManager.js";
 import { SubscriptionManager } from "../features/subscriptionManager.js";
@@ -53,6 +54,15 @@ class PopupManager {
     try {
       const token = await getAuthToken(true);
       this.authToken = token;
+
+      // Detect languages during first login
+      const existingLanguages = await SecureStorage.get("userLanguages");
+      if (!existingLanguages) {
+        loadingSpinner(true);
+        const languageDetector = new LanguageDetector();
+        await languageDetector.detectAndSaveUserLanguages(token);
+        loadingSpinner(false);
+      }
 
       await SecureStorage.set("authData", {
         loggedIn: true,
@@ -312,7 +322,6 @@ class PopupManager {
               email: subSelect.value,
             }));
 
-            console.log("Final data payload:", dataPayload);
             openDataWindow("../popup/list-page/listPage.html", dataPayload);
           } else {
             throw new Error("No data payload created");
