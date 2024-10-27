@@ -95,11 +95,15 @@ class TableManager {
 
   handleUnsubscribe(event) {
     const button = event.target;
-    const email = decodeURIComponent(button.dataset.email);
     const unsubscribeLink = decodeURIComponent(button.dataset.unsubscribe);
 
     if (unsubscribeLink) {
-      window.open(unsubscribeLink, "_blank");
+      chrome.windows.create({
+        url: unsubscribeLink,
+        type: "popup",
+        width: 800,
+        height: 600,
+      });
       button.style.backgroundColor = "green";
       button.disabled = true;
     }

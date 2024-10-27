@@ -80,7 +80,7 @@ export function extractEmailAddress(fromHeader) {
   return match ? match[1].trim() : fromHeader.trim();
 }
 
-export function confirmDeletion(token, messageIds, itemName) {
+export function confirmDeletion(token, messageIds, itemName, callback = null) {
   showCustomModal(
     `Delete all emails from "${itemName}"?`,
     async () => {
@@ -88,10 +88,14 @@ export function confirmDeletion(token, messageIds, itemName) {
         const success = await deleteEmails(token, messageIds);
         if (success) {
           showCustomModal(`${itemName} deleted successfully!`);
+          if (callback) callback(true);
+        } else {
+          if (callback) callback(false);
         }
       } catch (error) {
         logError(error);
         showCustomModal(`Error deleting emails: ${error.message}`);
+        if (callback) callback(false);
       }
     },
     true
