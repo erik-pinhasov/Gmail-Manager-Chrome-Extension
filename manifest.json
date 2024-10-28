@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Gmail Email Fetcher",
+  "name": "Gmail Manager",
   "version": "1.0",
-  "description": "Chrome extension.",
+  "description": "Manage Gmail emails with bulk delete and unsubscribe features",
   "icons": {
     "16": "./src/assets/icon.png",
     "48": "./src/assets/icon.png",
