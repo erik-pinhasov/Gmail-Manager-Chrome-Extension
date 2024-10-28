@@ -1,12 +1,19 @@
 import { SecureStorage } from "../utils/storage.js";
 import { showCustomModal, logError } from "../utils/utils.js";
 
+// Validates Gmail OAuth token format
 function isValidToken(token) {
   return (
     typeof token === "string" && token.length > 0 && token.startsWith("ya29.")
   );
 }
 
+// Creates a promise-based delay
+export async function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Makes authenticated requests to Gmail API
 async function makeRequest(url, options = {}) {
   const response = await fetch(url, {
     ...options,
@@ -35,10 +42,7 @@ async function makeRequest(url, options = {}) {
   return null;
 }
 
-async function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
+// Verifies if token is still valid with Google
 async function checkTokenExpiry(token) {
   try {
     await makeRequest("https://www.googleapis.com/oauth2/v1/tokeninfo", {
@@ -51,6 +55,7 @@ async function checkTokenExpiry(token) {
   }
 }
 
+// Handles token errors by clearing storage and optionally requesting new token
 async function handleTokenError(error, interactive) {
   await SecureStorage.clear();
   if (!interactive) {
@@ -59,6 +64,7 @@ async function handleTokenError(error, interactive) {
   return getAuthToken(true);
 }
 
+// Gets and validates OAuth token for Gmail API access
 export function getAuthToken(interactive = false) {
   return new Promise((resolve, reject) => {
     chrome.identity.getAuthToken({ interactive }, async (token) => {
@@ -94,7 +100,8 @@ export function getAuthToken(interactive = false) {
   });
 }
 
-export async function fetchWithRetries(url, token, retries = 3, delayMs = 500) {
+// Makes API requests with retry logic for rate limits (429 errors)
+export async function fetchWithRetries(url, token, retries = 3, delayMs = 200) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       return await makeRequest(url, { token });
@@ -109,6 +116,7 @@ export async function fetchWithRetries(url, token, retries = 3, delayMs = 500) {
   }
 }
 
+// Fetches emails with pagination support
 export async function fetchEmails(token, labelId = "", query = "") {
   const maxResults = 1000;
   let emailCount = 0;
@@ -146,6 +154,7 @@ export async function fetchEmails(token, labelId = "", query = "") {
   }
 }
 
+// Fetches email headers for a specific message ID
 export async function fetchEmailDetails(token, messageId) {
   try {
     const url = `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?fields=payload.headers`;
@@ -157,6 +166,7 @@ export async function fetchEmailDetails(token, messageId) {
   }
 }
 
+// Deletes emails in batches of 1000
 export async function deleteEmails(token, messageIds) {
   const batchSize = 1000;
 
@@ -186,9 +196,13 @@ export async function deleteEmails(token, messageIds) {
   };
 
   try {
+    // Delete in batches
     for (let i = 0; i < messageIds.length; i += batchSize) {
       const batch = messageIds.slice(i, i + batchSize);
       await deleteBatch(batch);
+      if (i + batchSize < messageIds.length) {
+        await delay(100);
+      }
     }
     return true;
   } catch (error) {
@@ -197,7 +211,7 @@ export async function deleteEmails(token, messageIds) {
     return false;
   }
 }
-
+// Handles user logout and token cleanup
 export async function logout(token) {
   if (!token) {
     throw new Error("No token provided for logout");
@@ -230,6 +244,7 @@ export async function logout(token) {
   }
 }
 
+// Storage helper functions
 export const setStorageData = (data) => SecureStorage.set("authData", data);
 export const getStorageData = () => SecureStorage.get("authData");
 export const getUserInfo = () =>

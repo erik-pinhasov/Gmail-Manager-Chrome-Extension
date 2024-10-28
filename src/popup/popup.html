@@ -40,8 +40,10 @@
 
     <div id="bySenderWindow" class="hidden">
       <h2>
-        Search and Select Email Address to Delete<br />Results include all
-        emails of an address
+        Search with Text or Email Address.<br />
+        <span style="font-size: 14px; font-weight: normal"
+          >Results include all emails of an address.</span
+        >
       </h2>
       <input
         type="text"
@@ -56,10 +58,24 @@
     </div>
 
     <div id="subsWindow" class="hidden">
-      <h2>Select Year and Fetch Subscriptions</h2>
+      <h2>
+        Find Subscriptions by Year.<br />
+        <span style="font-size: 14px; font-weight: normal"
+          >Results include all emails of an address.</span
+        >
+      </h2>
       <select id="yearSelect" class="scrollableDropdown"></select>
-      <button id="fetchByYear">Fetch Subscriptions</button>
-      <button id="backToMenu">Back to Main Menu</button>
+      <button id="fetchSubscriptions">Search</button>
+      <select
+        id="subscriptionSelect"
+        class="scrollableDropdown hidden"
+      ></select>
+      <button id="viewSubscriptionEmails" class="hidden">View Emails</button>
+      <button id="unsubscribeButton" class="hidden">Unsubscribe</button>
+      <button id="deleteSubscription" class="hidden">
+        Delete Sender Emails
+      </button>
+      <button id="backToMenu">Back</button>
     </div>
 
     <div id="customModal" class="modal">

@@ -3,34 +3,52 @@ import {
   loadingSpinner,
   showWindow,
   logError,
+  openDataWindow,
 } from "../utils/utils.js";
-import { fetchLabels, batchDeleteLabel } from "../features/deleteByLabel.js";
-import {
-  fetchEmailsBySearch,
-  batchDeleteSender,
-  displayEmailsCounts,
-  fetchSenderEmails,
-} from "../features/deleteBySender.js";
-import {
-  handleFetchSubscriptionsByYear,
-  populateYearOptions,
-} from "../features/manageSubscriptions.js";
 import { getAuthToken, getUserInfo, logout } from "../utils/api.js";
-import { sanitizeInput, sanitizeEmailAddress } from "../utils/sanitization.js";
+import { sanitizeEmailAddress } from "../utils/sanitization.js";
 import { SecureStorage } from "../utils/storage.js";
+import { LanguageDetector } from "../utils/languageDetector.js";
+import { SenderManager } from "../features/senderManager.js";
+import { LabelManager } from "../features/labelManager.js";
+import { SubscriptionManager } from "../features/subscriptionManager.js";
 
+/**
+ * Manages the extension's popup UI and feature interactions.
+ * Initializes three main features: email sender management, label management, and subscription management.
+ *
+ * Properties:
+ * - senderManager: Handles email batch deletion based on sender address
+ * - labelManager: Handles email batch deletion based on Gmail labels/Categories
+ * - subscriptionManager: Handles unsubscription and batch deletion
+ */
 class PopupManager {
   constructor() {
+    this.senderManager = new SenderManager();
+    this.labelManager = new LabelManager();
+    this.subscriptionManager = new SubscriptionManager();
+    this.authToken = null;
     this.initEventListeners();
   }
 
+  /* -------------------
+    Utility and Initialization Methods
+     -------------------
+*/
+
+  // Set up all event listeners on DOM load
   async initEventListeners() {
     document.addEventListener("DOMContentLoaded", () => this.initPopup());
     this.initAuthButtons();
     this.initFeatureHandlers();
-    this.initBackButtons();
+    document
+      .querySelectorAll("#backToMenu")
+      .forEach((button) =>
+        button.addEventListener("click", () => location.reload())
+      );
   }
 
+  // Initialize login/logout button handlers
   initAuthButtons() {
     document
       .getElementById("loginButton")
@@ -40,22 +58,86 @@ class PopupManager {
       ?.addEventListener("click", () => this.handleLogout());
   }
 
+  // Initialize all feature event handlers
   initFeatureHandlers() {
     this.initDeleteByLabel();
     this.initDeleteBySender();
     this.initSubscriptions();
   }
 
-  initBackButtons() {
-    document.querySelectorAll("#backToMenu").forEach((button) => {
-      button.addEventListener("click", () => location.reload());
-    });
+  // Safely execute async operations with loading state and error handling
+  async safeOperation(operation, errorMessage = "Operation failed") {
+    try {
+      loadingSpinner(true);
+      await operation();
+      loadingSpinner(false);
+    } catch (error) {
+      loadingSpinner(false);
+      logError(error);
+      showCustomModal(errorMessage);
+    }
   }
 
+  // Validate select element value and show error if invalid
+  validateSelection(selectId, message) {
+    const select = document.getElementById(selectId);
+    if (!select?.value) {
+      showCustomModal(message);
+      return null;
+    }
+    return select;
+  }
+
+  /* -------------------
+    Authentication and Email Methods
+     -------------------
+*/
+
+  // Handle email viewing for both sender and subscription features
+  async handleViewEmails(
+    manager,
+    identifier,
+    columns,
+    includeEmailColumn = false
+  ) {
+    const messageIds = manager.cache.messageIds.get(
+      manager.getCacheKey(identifier)
+    );
+
+    if (!messageIds?.length) {
+      showCustomModal("No emails found.");
+      return;
+    }
+
+    const token = await getAuthToken(true);
+    const dataPayload = await manager.fetchEmailDetails(
+      token,
+      messageIds,
+      columns
+    );
+
+    if (dataPayload) {
+      if (includeEmailColumn) {
+        dataPayload.dataItems = dataPayload.dataItems.map((item) => ({
+          ...item,
+          email: identifier,
+        }));
+      }
+      openDataWindow("../popup/list-page/listPage.html", dataPayload);
+    }
+  }
+
+  // Handle user login and language detection
   async handleLogin() {
-    try {
+    await this.safeOperation(async () => {
       const token = await getAuthToken(true);
       this.authToken = token;
+
+      const existingLanguages = await SecureStorage.get("userLanguages");
+      if (!existingLanguages) {
+        const languageDetector = new LanguageDetector();
+        await languageDetector.detectAndSaveUserLanguages(token);
+      }
 
       await SecureStorage.set("authData", {
         loggedIn: true,
@@ -65,27 +147,15 @@ class PopupManager {
 
       await this.initUserDetails();
       showWindow("mainWindow");
-    } catch (error) {
-      logError(error);
-      showCustomModal("Login failed. Please try again.");
-    }
+    }, "Login failed. Please try again.");
   }
 
+  // Handle user logout and state cleanup
   async handleLogout() {
     try {
-      const token = this.authToken;
-      if (!token) {
-        await SecureStorage.clear();
-        showWindow("loginWindow");
-        return;
+      if (this.authToken) {
+        await logout(this.authToken);
       }
-
-      try {
-        await logout(token);
-      } catch (error) {
-        logError(error);
-      }
-
       await SecureStorage.clear();
       this.authToken = null;
       showCustomModal("Logged out successfully.");
@@ -98,10 +168,11 @@ class PopupManager {
     }
   }
 
+  // Initialize welcome message with user email
   async initUserDetails() {
     const userInfo = await getUserInfo();
     const message = document.getElementById("welcomeMessage");
-    if (message) {
+    if (message && userInfo?.email) {
       const sanitizedEmail = sanitizeEmailAddress(userInfo.email);
       message.textContent = sanitizedEmail
         ? `Welcome, ${sanitizedEmail}`
@@ -109,168 +180,211 @@ class PopupManager {
     }
   }
 
+  /* -------------------
+    Feature Handlers
+     -------------------
+*/
+
+  // Set up label deletion feature handlers
   initDeleteByLabel() {
     document.getElementById("byLabel")?.addEventListener("click", async () => {
-      try {
-        loadingSpinner(true);
+      await this.safeOperation(async () => {
         const token = await getAuthToken(true);
-        await fetchLabels(token);
-        loadingSpinner(false);
+        const labels = await this.labelManager.fetchLabels(token);
+        this.labelManager.displayItems(labels);
         showWindow("byLabelWindow");
-      } catch (error) {
-        loadingSpinner(false);
-        showCustomModal(error.message);
-      }
+      });
     });
 
     document
       .getElementById("deleteByLabel")
       ?.addEventListener("click", async () => {
-        try {
-          const labelSelect = document.getElementById("labelSelect");
-          if (!labelSelect) return;
+        const labelSelect = this.validateSelection(
+          "labelSelect",
+          "Please select a label first."
+        );
+        if (!labelSelect) return;
 
+        await this.safeOperation(async () => {
           const token = await getAuthToken(false);
-          await batchDeleteLabel(
-            token,
-            labelSelect.value,
-            labelSelect.options[labelSelect.selectedIndex].text
-          );
-        } catch (error) {
-          showCustomModal(error.message);
-        }
+          await this.labelManager.batchDelete(token, labelSelect.value);
+        });
       });
   }
 
+  // Set up sender-based email management handlers
   initDeleteBySender() {
     document.getElementById("bySender")?.addEventListener("click", () => {
       showWindow("bySenderWindow");
     });
 
-    this.initSearchHandler();
-    this.initViewEmailsHandler();
-    this.initDeleteSenderHandler();
-  }
-
-  initSearchHandler() {
     document
       .getElementById("searchSender")
       ?.addEventListener("click", async () => {
-        const searchInput = document.getElementById("searchInput");
-        const searchTerm = sanitizeInput(searchInput?.value?.trim());
-
+        const searchTerm = document
+          .getElementById("searchInput")
+          ?.value?.trim();
         if (!searchTerm) {
-          showCustomModal("Please enter a valid search term.");
+          showCustomModal("Please enter a search term.");
           return;
         }
 
-        try {
-          loadingSpinner(true);
+        await this.safeOperation(async () => {
           const token = await getAuthToken(true);
-          const senders = await fetchEmailsBySearch(token, searchTerm);
-          loadingSpinner(false);
-          displayEmailsCounts(senders);
-        } catch (error) {
-          loadingSpinner(false);
-          showCustomModal(error.message);
-        }
+          const senders = await this.senderManager.fetchBySearch(
+            token,
+            searchTerm
+          );
+          this.senderManager.displayItems(senders);
+        });
       });
-  }
 
-  initViewEmailsHandler() {
     document
       .getElementById("viewEmails")
       ?.addEventListener("click", async () => {
-        const senderSelect = document.getElementById("senderSelect");
-        const selectedSender = senderSelect?.value;
+        const senderSelect = this.validateSelection(
+          "senderSelect",
+          "Please select a sender first."
+        );
+        if (!senderSelect) return;
 
-        if (!selectedSender) {
-          showCustomModal("Please select a sender first.");
-          return;
-        }
-
-        try {
-          loadingSpinner(true);
-          const token = await getAuthToken(true);
-          await fetchSenderEmails(token, selectedSender);
-          loadingSpinner(false);
-        } catch (error) {
-          loadingSpinner(false);
-          showCustomModal("Error fetching email details.");
-          logError(error);
-        }
+        await this.safeOperation(async () => {
+          await this.handleViewEmails(this.senderManager, senderSelect.value, [
+            { label: "Subject", key: "subject" },
+            { label: "Date", key: "date" },
+            { label: "Time", key: "time" },
+          ]);
+        }, "Error fetching email details.");
       });
-  }
 
-  initDeleteSenderHandler() {
     document
       .getElementById("deleteBySender")
       ?.addEventListener("click", async () => {
-        const senderSelect = document.getElementById("senderSelect");
+        const senderSelect = this.validateSelection(
+          "senderSelect",
+          "Please select a sender first."
+        );
         if (!senderSelect) return;
 
-        try {
+        await this.safeOperation(async () => {
           const token = await getAuthToken(false);
-          await batchDeleteSender(token, senderSelect.value);
-        } catch (error) {
-          showCustomModal(error.message);
-        }
+          await this.senderManager.batchDelete(token, senderSelect.value);
+        });
       });
   }
 
+  // Set up subscription management handlers
   initSubscriptions() {
     document.getElementById("subscriptions")?.addEventListener("click", () => {
-      populateYearOptions();
+      this.subscriptionManager.populateYearOptions();
       showWindow("subsWindow");
     });
 
     document
-      .getElementById("fetchByYear")
+      .getElementById("fetchSubscriptions")
       ?.addEventListener("click", async () => {
-        const yearSelect = document.getElementById("yearSelect");
+        const yearSelect = this.validateSelection(
+          "yearSelect",
+          "Please select a year first."
+        );
         if (!yearSelect) return;
 
-        try {
-          loadingSpinner(true);
+        await this.safeOperation(async () => {
           const token = await getAuthToken(true);
-          const dataPayload = await handleFetchSubscriptionsByYear(
+          const subscriptions = await this.subscriptionManager.fetchByYear(
             token,
             yearSelect.value
           );
-          loadingSpinner(false);
+          this.subscriptionManager.displayItems(subscriptions);
+        });
+      });
 
-          if (!dataPayload.dataItems.length) {
-            showCustomModal("No subscriptions found for the selected year.");
-            return;
-          }
+    document
+      .getElementById("viewSubscriptionEmails")
+      ?.addEventListener("click", async () => {
+        const subSelect = this.validateSelection(
+          "subscriptionSelect",
+          "Please select a subscription first."
+        );
+        if (!subSelect) return;
 
-          openDataWindow("listPage.html", dataPayload);
-        } catch (error) {
-          loadingSpinner(false);
-          showCustomModal(error.message);
+        await this.safeOperation(async () => {
+          await this.handleViewEmails(
+            this.subscriptionManager,
+            subSelect.value,
+            [
+              { label: "Email Address", key: "email" },
+              { label: "Subject", key: "subject" },
+              { label: "Date", key: "date" },
+              { label: "Time", key: "time" },
+            ],
+            true
+          );
+        }, "Error fetching subscription details.");
+      });
+
+    document
+      .getElementById("unsubscribeButton")
+      ?.addEventListener("click", () => {
+        const subSelect = this.validateSelection(
+          "subscriptionSelect",
+          "Please select a subscription first."
+        );
+        if (!subSelect) return;
+
+        const subscription = this.subscriptionManager.cache.items.get(
+          subSelect.value
+        );
+        if (subscription?.unsubscribeLink) {
+          chrome.windows.create(
+            {
+              url: subscription.unsubscribeLink,
+              type: "popup",
+              width: 800,
+              height: 600,
+            },
+            () => {
+              this.subscriptionManager.markAsUnsubscribed(subSelect.value);
+            }
+          );
+        } else {
+          showCustomModal(
+            "No valid unsubscribe link found for this subscription."
+          );
         }
+      });
+
+    document
+      .getElementById("deleteSubscription")
+      ?.addEventListener("click", async () => {
+        const subSelect = this.validateSelection(
+          "subscriptionSelect",
+          "Please select a subscription first."
+        );
+        if (!subSelect) return;
+
+        await this.safeOperation(async () => {
+          const token = await getAuthToken(false);
+          await this.subscriptionManager.batchDelete(token, subSelect.value);
+        });
       });
   }
 
+  // Initialize popup state based on auth status
   async initPopup() {
     try {
       const storageData = await SecureStorage.get("authData");
-
       if (!storageData?.loggedIn) {
         showWindow("loginWindow");
         return;
       }
 
-      try {
+      await this.safeOperation(async () => {
         const token = await getAuthToken(false);
         this.authToken = token;
         await this.initUserDetails();
         showWindow("mainWindow");
-      } catch (error) {
-        logError(error);
-        await SecureStorage.clear();
-        showWindow("loginWindow");
-      }
+      });
     } catch (error) {
       logError(error);
       showWindow("loginWindow");

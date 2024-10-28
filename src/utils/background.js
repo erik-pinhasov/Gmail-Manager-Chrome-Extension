@@ -17,6 +17,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     requestAuthToken(interactive, (token) => {
       sendResponse({ token });
     });
-    return true;
+    return true; // Keep message channel open for async response
   }
 });
