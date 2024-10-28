@@ -1,4 +1,3 @@
-// languageUtils.js
 import { getHeaderValue, logError } from "./utils.js";
 import { fetchEmailDetails, fetchWithRetries } from "./api.js";
 import { SecureStorage } from "../utils/storage.js";

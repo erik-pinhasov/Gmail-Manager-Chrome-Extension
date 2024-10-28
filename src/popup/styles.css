@@ -118,6 +118,13 @@ button:hover {
   width: 100%;
 }
 
+#modalMessage {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 20px 0;
+}
+
 .loadingOverlay {
   position: fixed;
   top: 0;
