@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Gmail Email Fetcher",
   "version": "1.0",
-  "description": "A Chrome extension to fetch emails from Gmail.",
+  "description": "Chrome extension.",
   "icons": {
     "16": "./src/assets/icon.png",
     "48": "./src/assets/icon.png",
