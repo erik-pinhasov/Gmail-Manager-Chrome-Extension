@@ -2,8 +2,9 @@ import * as storage from "./storage.js";
 import { logError } from "../utils/utils.js";
 
 export class Cache {
+  // Initialize cache with TTL, size limits, and load persisted data
   constructor(options = {}) {
-    this.ttl = options.ttl || 15 * 60 * 1000;
+    this.ttl = options.ttl || 15 * 60 * 1000; // Default 15 minutes
     this.maxSize = options.maxSize || 1000;
     this.cacheKey = options.cacheKey || "defaultCache";
     this.timestamps = new Map();
@@ -11,6 +12,7 @@ export class Cache {
     this.loadPersistedCache();
   }
 
+  // Reset all cache collections
   clear() {
     this.items = new Map();
     this.counts = new Map();
@@ -18,6 +20,7 @@ export class Cache {
     this.timestamps.clear();
   }
 
+  // Save cache state to storage
   async persistCache() {
     try {
       const cacheData = {
@@ -34,17 +37,19 @@ export class Cache {
     }
   }
 
+  // Load previously saved cache state
   async loadPersistedCache() {
     try {
       const cacheData = await storage.SecureStorage.get(this.cacheKey);
       if (cacheData) {
+        // Restore all cache collections
         this.items = new Map(cacheData.items);
         this.counts = new Map(cacheData.counts);
         this.messageIds = new Map(cacheData.messageIds);
         this.timestamps = new Map(cacheData.timestamps);
         this.ttl = cacheData.ttl || this.ttl;
         this.maxSize = cacheData.maxSize || this.maxSize;
-        this.cleanCache();
+        this.cleanCache(); // Remove expired items
       }
     } catch (error) {
       logError(error);
@@ -52,8 +57,10 @@ export class Cache {
     }
   }
 
+  // Add or update item with size management
   setItem(id, item) {
     this.cleanCache();
+    // Remove oldest item if cache is full
     if (this.items.size >= this.maxSize) {
       const oldestKey = this.getOldestKey();
       if (oldestKey) this.deleteItem(oldestKey);
@@ -63,18 +70,21 @@ export class Cache {
     this.persistCache();
   }
 
+  // Update email count for an item
   setCount(id, count) {
     this.counts.set(id, count);
     this.timestamps.set(id, Date.now());
     this.persistCache();
   }
 
+  // Update message IDs for an item
   setMessageIds(id, messageIds) {
     this.messageIds.set(id, messageIds);
     this.timestamps.set(id, Date.now());
     this.persistCache();
   }
 
+  // Reset item data after deletion
   updateAfterDeletion(id) {
     this.counts.set(id, 0);
     this.messageIds.set(id, []);
@@ -82,6 +92,7 @@ export class Cache {
     this.persistCache();
   }
 
+  // Remove expired items from cache
   cleanCache() {
     const now = Date.now();
     let hasChanges = false;
@@ -94,6 +105,7 @@ export class Cache {
     if (hasChanges) this.persistCache();
   }
 
+  // Remove item from all collections
   deleteItem(id) {
     this.items.delete(id);
     this.counts.delete(id);
@@ -101,6 +113,7 @@ export class Cache {
     this.timestamps.delete(id);
   }
 
+  // Get item if not expired
   getItem(id) {
     const timestamp = this.timestamps.get(id);
     if (!timestamp || Date.now() - timestamp > this.ttl) {
@@ -111,6 +124,7 @@ export class Cache {
     return this.items.get(id);
   }
 
+  // Find oldest item in cache
   getOldestKey() {
     let oldestTime = Date.now();
     let oldestKey = null;

@@ -1,9 +1,12 @@
+// languageUtils.js
 import { getHeaderValue, logError } from "./utils.js";
 import { fetchEmailDetails, fetchWithRetries } from "./api.js";
 import { SecureStorage } from "../utils/storage.js";
 
 export class LanguageDetector {
+  // Initialize supported languages with their subscription-related keywords and patterns
   constructor() {
+    // Dictionary of keywords for each language
     this.keywords = {
       en: [
         "unsubscribe",
@@ -118,6 +121,7 @@ export class LanguageDetector {
       ],
     };
 
+    // Regular expressions for detecting language scripts (Unicode range)
     this.languagePatterns = {
       he: /[\u0590-\u05FF]/, // Hebrew
       ar: /[\u0600-\u06FF]/, // Arabic
@@ -132,26 +136,31 @@ export class LanguageDetector {
     };
   }
 
+  // Analyze recent emails to detect user's languages and save them
   async detectAndSaveUserLanguages(token) {
     try {
+      // Fetch recent messages (limited to 200)
       const url =
         "https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=200";
       const data = await fetchWithRetries(url, token);
 
       if (!data?.messages?.length) return ["en"];
 
-      const detectedLanguages = new Set(["en"]);
+      const detectedLanguages = new Set(["en"]); // Always include English
       const messageIds = data.messages.map((msg) => msg.id);
 
+      // Process messages in parallel
       await Promise.all(
         messageIds.map(async (messageId) => {
           try {
             const emailData = await fetchEmailDetails(token, messageId);
             if (!emailData?.headers) return;
 
+            // Combine subject and snippet for better detection
             const subject = getHeaderValue(emailData.headers, "Subject") || "";
             const content = subject + " " + (emailData.snippet || "");
 
+            // Add detected languages to set
             this.detectLanguagesInText(content).forEach((lang) =>
               detectedLanguages.add(lang)
             );
@@ -161,6 +170,7 @@ export class LanguageDetector {
         })
       );
 
+      // Save detected languages for future use
       const userLanguages = Array.from(detectedLanguages);
       await SecureStorage.set("userLanguages", userLanguages);
       return userLanguages;
@@ -170,6 +180,7 @@ export class LanguageDetector {
     }
   }
 
+  // Detect languages in a text using pattern matching
   detectLanguagesInText(text) {
     const detectedLanguages = new Set();
 
@@ -182,6 +193,7 @@ export class LanguageDetector {
     return Array.from(detectedLanguages);
   }
 
+  // Build Gmail search query with multilingual keywords
   buildSearchQuery(year, languages) {
     const datePart = `after:${year}/01/01 before:${year}/12/31`;
     const allKeywords = languages.flatMap((lang) => this.keywords[lang] || []);

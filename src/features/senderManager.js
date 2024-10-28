@@ -5,13 +5,14 @@ import {
   getHeaderValue,
   logError,
 } from "../utils/utils.js";
-import { fetchEmails, fetchEmailDetails } from "../utils/api.js";
+import { fetchEmails, fetchEmailDetails, delay } from "../utils/api.js";
 import {
   sanitizeEmailAddress,
   sanitizeSearchQuery,
 } from "../utils/sanitization.js";
 
 export class SenderManager extends EmailManager {
+  // Initialize SenderManager with cache and UI configurations
   constructor() {
     super({
       cacheKey: "senderCache",
@@ -20,6 +21,7 @@ export class SenderManager extends EmailManager {
     });
   }
 
+  // Main function to search and fetch emails by search term
   async fetchBySearch(token, searchTerm) {
     const sanitizedTerm = sanitizeSearchQuery(searchTerm);
     if (!sanitizedTerm) {
@@ -30,6 +32,7 @@ export class SenderManager extends EmailManager {
     this.clearCache();
 
     try {
+      // Initial search to get matching emails
       const { emailCount, emailIds } = await fetchEmails(
         token,
         "",
@@ -41,9 +44,11 @@ export class SenderManager extends EmailManager {
         return [];
       }
 
+      // Extract unique senders and fetch their email counts
       const sendersMap = await this.extractSendersInBatches(token, emailIds);
       const sendersArray = Array.from(sendersMap.values());
 
+      // Sort senders by email count
       return this.fetchAndSortItems(
         token,
         sendersArray,
@@ -58,6 +63,7 @@ export class SenderManager extends EmailManager {
     }
   }
 
+  // Process emails in batches to avoid rate limits
   async extractSendersInBatches(token, messageIds, batchSize = 20) {
     const sendersMap = new Map();
     const retryDelay = 1000;
@@ -74,9 +80,7 @@ export class SenderManager extends EmailManager {
         } catch (error) {
           retryCount++;
           if (error.status === 429 || error.message?.includes("429")) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, retryDelay * Math.pow(2, retryCount))
-            );
+            await delay(retryDelay * Math.pow(2, retryCount));
             continue;
           }
           logError(error, { batch, retryCount });
@@ -85,13 +89,14 @@ export class SenderManager extends EmailManager {
       }
 
       if (i + batchSize < messageIds.length) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await delay(100);
       }
     }
 
     return sendersMap;
   }
 
+  // Process a batch of messages to extract unique senders
   async processSenderBatch(token, messageIds, sendersMap) {
     await Promise.all(
       messageIds.map(async (messageId) => {
@@ -103,6 +108,7 @@ export class SenderManager extends EmailManager {
               const emailAddress = sanitizeEmailAddress(
                 extractEmailAddress(from)
               );
+              // Store unique senders with their display names
               if (emailAddress && !sendersMap.has(emailAddress)) {
                 sendersMap.set(emailAddress, {
                   identifier: emailAddress,
@@ -118,10 +124,12 @@ export class SenderManager extends EmailManager {
     );
   }
 
+  // Return title for email list view
   getTableTitle() {
     return "Email Subjects";
   }
 
+  // Format display text for sender in dropdown
   formatOptionText(item) {
     return `${item.identifier} (${item.count} emails)`;
   }

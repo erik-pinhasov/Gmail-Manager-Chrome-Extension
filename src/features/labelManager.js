@@ -3,6 +3,7 @@ import { showCustomModal, logError } from "../utils/utils.js";
 import { fetchWithRetries, fetchEmails } from "../utils/api.js";
 
 export class LabelManager extends EmailManager {
+  // Initialize label manager with cache and UI configuration
   constructor() {
     super({
       cacheKey: "labelCache",
@@ -11,6 +12,7 @@ export class LabelManager extends EmailManager {
     });
   }
 
+  // Fetch and process all Gmail labels with their email counts
   async fetchLabels(token) {
     this.clearCache();
     const url = "https://www.googleapis.com/gmail/v1/users/me/labels";
@@ -22,6 +24,7 @@ export class LabelManager extends EmailManager {
         return [];
       }
 
+      // Transform labels into standard format
       const labelsArray = data.labels.map((label) => ({
         identifier: label.id,
         metadata: {
@@ -30,6 +33,7 @@ export class LabelManager extends EmailManager {
         },
       }));
 
+      // Fetch email counts for each label in parallel
       const labelCounts = await Promise.all(
         labelsArray.map(async (label) => {
           try {
@@ -40,9 +44,9 @@ export class LabelManager extends EmailManager {
             );
             const cacheKey = this.getCacheKey(label.identifier);
 
+            // Cache all label data
             this.cache.setMessageIds(cacheKey, emailIds || []);
             this.cache.setCount(cacheKey, emailCount);
-
             this.cache.setItem(label.identifier, label.metadata);
 
             return {
@@ -67,20 +71,28 @@ export class LabelManager extends EmailManager {
     }
   }
 
+  // Format Gmail label names for display
   formatLabelName(labelName) {
-    if (labelName.startsWith("CATEGORY_")) {
-      labelName = labelName.replace("CATEGORY_", "");
+    try {
+      if (labelName.startsWith("CATEGORY_")) {
+        labelName = labelName.replace("CATEGORY_", "");
+      }
+      return labelName
+        .split("_")
+        .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+        .join(" ");
+    } catch (error) {
+      logError(error, labelName);
+      return labelName; // Return original name if formatting fails
     }
-    return labelName
-      .split("_")
-      .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-      .join(" ");
   }
 
+  // Get title for email list view
   getTableTitle() {
     return "Labeled Emails";
   }
 
+  // Format display text for label in dropdown
   formatOptionText(item) {
     return `${item.metadata.labelName} (${item.count} emails)`;
   }

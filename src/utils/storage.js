@@ -1,11 +1,13 @@
 import { logError } from "../utils/utils.js";
 
 export const SecureStorage = {
+  // Store data in Chrome's local storage with type safety
   async set(key, value) {
     if (!key || typeof key !== "string") {
       throw new Error("Invalid storage key");
     }
 
+    // Ensure value is safely stringified
     const safeValue =
       typeof value === "object" ? JSON.stringify(value) : String(value);
 
@@ -20,6 +22,7 @@ export const SecureStorage = {
     });
   },
 
+  // Retrieve and parse data from storage
   async get(key) {
     if (!key || typeof key !== "string") {
       throw new Error("Invalid storage key");
@@ -36,12 +39,13 @@ export const SecureStorage = {
           const value = result[key];
           resolve(value ? JSON.parse(value) : null);
         } catch {
-          resolve(result[key]);
+          resolve(result[key]); // Return raw value if parsing fails
         }
       });
     });
   },
 
+  // Clear all stored data
   async clear() {
     return new Promise((resolve) => {
       chrome.storage.local.clear(() => {
