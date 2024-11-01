@@ -1,6 +1,6 @@
 # Privacy Policy for Gmail Manager Extension
 
-Last Updated: [Current Date]
+Last Updated: 1/11/2024
 
 ## Introduction
 
