@@ -1,6 +1,7 @@
 # Gmail Manager Chrome Extension
 
 Chrome extension for bulk deleting Gmail emails and fast unsubscribing with real-time emails count updates.
+Watch Extension use video: https://www.youtube.com/watch?v=44Pl08BqP10
 
 ## Features
 
